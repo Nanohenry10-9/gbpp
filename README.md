@@ -1,8 +1,8 @@
-# gbpp (**G**ame **B**oy **P**lus **P**lus)
+# gbpp (Game Boy Plus Plus)
 
 A Game Boy emulator written in C++, using SDL2 for the graphics, controls and audio.
 
-(Despite its name, it in no way attempts to be better than other emulators out there, it is just a fun project.)
+(Despite its name, it in no way attempts to be better than other emulators out there, it's just a fun project.)
 
 ## Source code and building
 
@@ -17,7 +17,9 @@ g++ gbpp.cpp components\*.cpp -I"path/to/SDL-includes" -L"path/to/SDL-libraries"
 
 Well, not that accurate.
 
-It does not pass most of blargg's individual instruction test ROMs yet and the `cpu_instr` test crashes. However, it can run Super Mario Land, BGB's test ROM and some other games (mostly) fine, apart from a few minor graphical bugs and oddities.
+It passes some of blargg's instruction test ROMs but the `cpu_instrs` test crashes. It can run Super Mario Land, BGB's test ROM and some other games (mostly) fine, apart from a few minor graphical bugs and oddities.
+
+It runs most of the time at around 70% - 100% of full speed on an Intel Core i7-8550U at 1.80GHz, which is not ideal but fine for now.
 
 ## User interface
 
