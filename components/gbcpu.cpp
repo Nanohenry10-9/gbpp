@@ -44,7 +44,7 @@ void gbcpu::init(SDL_Texture* screen) {
     wakeOnInterrupt = stop = 0;
     timer = 0;
 
-    printTraceIn = 0xFFFFFFFFFFFFFFFF;
+    printTraceIn = -1ULL;
 
     mem.write(0xFF50, mem.read(0xFF50) | 0x01); // skip boot ROM
     REG_PC = 0x100;
@@ -270,7 +270,7 @@ void gbcpu::process() {
         tmp.regs[6] = REG_L;
         tmp.SP = REG_SP;
         trace.push_back(tmp);
-        if (printTraceIn != 0xFFFFFFFFFFFFFFFF) {
+        if (printTraceIn != -1ULL) {
             printTraceIn--;
             if (printTraceIn == 0) {
                 dump(300);

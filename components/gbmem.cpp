@@ -42,7 +42,7 @@ void gbmem::init(string file) {
     DMAindex = 0;
     DMAinProgress = 0;
 
-    /*ifstream DMG_ROM("DMG_ROM.bin", ios::binary | ios::ate);
+    /*ifstream DMG_ROM("", ios::binary | ios::ate); // place boot ROM file's path here (disabled by default)
     DMG_ROM.seekg(0, ios::beg);
     DMG_ROM.read((char*)bootROM, 0x100);*/
 
