@@ -6,7 +6,7 @@ A Game Boy emulator written in C++, using SDL2 for the graphics, controls and au
 
 ## Source code and building
 
-`gbpp.cpp` contains the main application logic and loop, `components/gbcpu.cpp` the CPU and timer emulation, `components/gbapu.cpp` the APU and sound emulation, `components/gbppu.cpp` the PPU emulation and `components\gbmem.cpp` the RAM, ROM and MBC1 emulation.
+`gbpp.cpp` contains the main application logic and loop, `components/gbcpu.cpp` the CPU and timer emulation, `components/gbapu.cpp` the APU and sound emulation, `components/gbppu.cpp` the PPU emulation and `components/gbmem.cpp` the RAM, ROM and MBC1 emulation.
 
 Requires `SDL2` to be installed and `SDL2.dll` to be in the same directory as `gbpp.cpp`. It can then be compiled for Windows using MinGW with
 ```
