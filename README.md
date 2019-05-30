@@ -37,6 +37,8 @@ The controls are mapped to the following keys:
 | Return          | Start           |
 | Backspace       | Select          |
 
+In addition, **R** resets the emulator to boot state.
+
 Right now these are hardcoded and cannot be configured (except by manually editing the source code).
 
 ## Audio
