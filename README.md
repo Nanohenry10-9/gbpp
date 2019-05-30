@@ -23,7 +23,7 @@ It runs most of the time at around 70% - 100% of full speed on an Intel Core i7-
 
 ## User interface
 
-The UI has currently the emulated Game Boy's screen on the left and the whole background, window and sprite tilemap on the right. The window is 1172x576 pixels, so if that does not fit your screen, please edit the window size in `gbpp.cpp` on line 35.
+The UI has currently the emulated Game Boy's screen on the left and the whole background, window and sprite tile data on the right. The window is 1172x576 pixels, so if that does not fit your screen, please edit the window size in `gbpp.cpp` on line 35.
 
 ## Controls
 
