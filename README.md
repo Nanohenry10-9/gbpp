@@ -15,9 +15,9 @@ g++ gbpp.cpp components\*.cpp -I"path/to/SDL-includes" -L"path/to/SDL-libraries"
 
 ## Accuracy
 
-Well, not that accurate.
+Well, far from perfect.
 
-It passes some of blargg's instruction test ROMs but the `cpu_instrs` test crashes. It can run Super Mario Land, BGB's test ROM and some other games (mostly) fine, apart from a few minor graphical bugs and oddities.
+It passes some of blargg's instruction test ROMs but the `cpu_instrs` test crashes on test 02. It can run Super Mario Land, BGB's test ROM and some other games (mostly) fine, apart from a few minor graphical bugs and oddities.
 
 It runs most of the time at around 70% - 100% of full speed on an Intel Core i7-8550U at 1.80GHz, which is not ideal but fine for now.
 
