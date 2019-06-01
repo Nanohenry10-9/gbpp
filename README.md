@@ -48,8 +48,8 @@ The emulator does not do sound yet, though support is on its way (if only SDL au
 ## Things to add in the future
 
 * Fix the CPU, which has some opcodes slightly broken at the moment
-* Fix the PPU (not sure what is broken but e.g. _Is that a demo in your pocket_'s effects render badly)
 * Window support (essentially a second movable background layer)
+* Proper background/window/sprite rendering priority support
 * Sound support, though I need to find an API for that (sound generation on Windows is quite bad apparently)
 * More debug options, such as an on-the-fly RAM reader/writer
 
