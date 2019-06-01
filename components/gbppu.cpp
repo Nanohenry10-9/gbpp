@@ -19,6 +19,8 @@ using namespace std;
 #define OAM  0xFE00
 #define VRAM 0x8000
 
+#define CMAP(c, p) ((TEST(pMem->read(p), (c * 2 + 1)) << 1) | TEST(pMem->read(p), (c * 2)))
+
 #define TEST(v, b) ((v & (1 << b)) == (1 << b))
 
 const uint8_t palette[4][3] = {{0xAC, 0xB5, 0x6B}, {0x76, 0x84, 0x48}, {0x3F, 0x50, 0x3F}, {0x24, 0x31, 0x37}};
@@ -29,19 +31,24 @@ uint32_t pixels[160 * 144];
 uint8_t buffer[160 * 144];
 bool debug;
 uint32_t map[8 * 8 * 48 * 8];
-SDL_Texture *lastFrame;
+uint32_t bgMap[32 * 8 * 32 * 8];
+SDL_Texture *lastFrame, *tm, *bg;
+gbmem *pMem;
 uint8_t spritesOnLine[10];
 uint8_t spriteIndex;
 
-void gbppu::init(SDL_Texture* screen) {
+void gbppu::init(gbmem* cMem, SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t) {
+    pMem = cMem;
     LX = 0;
     frameCount = 0;
     debug = 0;
     lastFrame = screen;
     spriteIndex = 0;
+    tm = e;
+    bg = t;
 }
 
-void gbppu::render(SDL_Texture* t) {
+void gbppu::render() {
     for (int i = 0; i < 160 * 144; i++) {
         pixels[i] = 0xFF000000 | (palette[buffer[i]][0] << 16) | (palette[buffer[i]][1] << 8) | palette[buffer[i]][2];
     }
@@ -63,59 +70,89 @@ void gbppu::render(SDL_Texture* t) {
             }
         }
     }*/
-    SDL_UpdateTexture(t, NULL, &pixels, 160 * 4);
+    SDL_UpdateTexture(lastFrame, NULL, &pixels, 160 * 4);
 }
 
-void gbppu::renderTilemap(SDL_Texture* t, gbmem* mem) {
+void gbppu::renderTilemap() {
     for (int y = 0; y < 48; y++) {
         for (int x = 0; x < 8; x++) {
             for (int ty = 0; ty < 8; ty++) {
                 for (int tx = 0; tx < 8; tx++) {
-                    uint8_t c = getTilePixel(mem, x + y * 8, tx, ty);
-                    map[x * 8 + tx + (y * 8 + ty) * 64] = 0xFF000000 | (palette[c][0] << 16) | (palette[c][1] << 8) | palette[c][2];
+                    uint8_t c = getTilePixel(x + y * 8, tx, ty);
+                    map[x * 8 + tx + (y * 8 + ty) * 8 * 8] = 0xFF000000 | (palette[c][0] << 16) | (palette[c][1] << 8) | palette[c][2];
                 }
             }
         }
     }
-    /*if (debug) {
-        for (int i = 0; i < 128; i += 8) {
-            for (int j = 0; j < 128; j++) {
-                uint8_t r = (map[i + j * 128] & 0x00FF0000) >> 16;
-                uint8_t g = (map[i + j * 128] & 0x0000FF00) >> 8;
-                uint8_t b = map[i + j * 128] & 0x000000FF;
-                map[i + j * 128] = 0xFF000000 | (uint8_t(r * 0.8) << 16) | (uint8_t(g * 0.8) << 8) | uint8_t(b * 0.8);
+    for (int y = 0; y < 32; y++) {
+        for (int x = 0; x < 32; x++) {
+            for (int ty = 0; ty < 8; ty++) {
+                for (int tx = 0; tx < 8; tx++) {
+                    uint8_t c = CMAP(getBGMapPixel(x, y, tx, ty), BGP);
+                    bgMap[x * 8 + tx + (y * 8 + ty) * 32 * 8] = 0xFF000000 | (palette[c][0] << 16) | (palette[c][1] << 8) | palette[c][2];
+                }
             }
         }
-        for (int i = 0; i < 128; i += 8) {
-            for (int j = 0; j < 128; j++) {
-                uint8_t r = (map[j + i * 128] & 0x00FF0000) >> 16;
-                uint8_t g = (map[j + i * 128] & 0x0000FF00) >> 8;
-                uint8_t b = map[j + i * 128] & 0x000000FF;
-                map[j + i * 128] = 0xFF000000 | (uint8_t(r * 0.8) << 16) | (uint8_t(g * 0.8) << 8) | uint8_t(b * 0.8);
-            }
-        }
-    }*/
-    SDL_UpdateTexture(t, NULL, &map, 64 * 4);
+    }
+    uint8_t scx = pMem->read(SCX);
+    uint8_t scy = pMem->read(SCY);
+    for (uint8_t x = scx; x != ((scx + 160) & 0xFF); x += 2) {
+        uint8_t r = ((bgMap[x + scy * 32 * 8] & 0x00FF0000) >> 16) >> 2;
+        uint8_t g = ((bgMap[x + scy * 32 * 8] & 0x0000FF00) >> 8) >> 2;
+        uint8_t b = (bgMap[x + scy * 32 * 8] & 0x000000FF) >> 2;
+        bgMap[x + scy * 32 * 8] = 0xFF000000 | (r << 16) || (g << 8) || b;
+    }
+    for (uint8_t y = scy + 2; y != ((scy + 144) & 0xFF); y += 2) {
+        uint8_t r = ((bgMap[scx + y * 32 * 8] & 0x00FF0000) >> 16) >> 2;
+        uint8_t g = ((bgMap[scx + y * 32 * 8] & 0x0000FF00) >> 8) >> 2;
+        uint8_t b = (bgMap[scx + y * 32 * 8] & 0x000000FF) >> 2;
+        bgMap[scx + y * 32 * 8] = 0xFF000000 | (r << 16) || (g << 8) || b;
+    }
+    for (uint8_t x = scx; x != ((scx + 160) & 0xFF); x += 2) {
+        uint8_t r = ((bgMap[x + ((scy + 144) & 0xFF) * 32 * 8] & 0x00FF0000) >> 16) >> 2;
+        uint8_t g = ((bgMap[x + ((scy + 144) & 0xFF) * 32 * 8] & 0x0000FF00) >> 8) >> 2;
+        uint8_t b = (bgMap[x + ((scy + 144) & 0xFF) * 32 * 8] & 0x000000FF) >> 2;
+        bgMap[x + ((scy + 144) & 0xFF) * 32 * 8] = 0xFF000000 | (r << 16) || (g << 8) || b;
+    }
+    for (uint8_t y = scy; y != ((scy + 146) & 0xFF); y += 2) {
+        uint8_t r = ((bgMap[((scx + 160) & 0xFF) + y * 32 * 8] & 0x00FF0000) >> 16) >> 2;
+        uint8_t g = ((bgMap[((scx + 160) & 0xFF) + y * 32 * 8] & 0x0000FF00) >> 8) >> 2;
+        uint8_t b = (bgMap[((scx + 160) & 0xFF) + y * 32 * 8] & 0x000000FF) >> 2;
+        bgMap[((scx + 160) & 0xFF) + y * 32 * 8] = 0xFF000000 | (r << 16) || (g << 8) || b;
+    }
+    SDL_UpdateTexture(tm, NULL, &map, 8 * 8 * 4);
+    SDL_UpdateTexture(bg, NULL, &bgMap, 32 * 8 * 4);
 }
 
-void gbppu::tick(gbmem* mem) {
-    scanlineAdvance(mem);
-    /*if (LX == 0 && mem->read(LY) < ) {
-
-    }*/
-    if (LX >= 80 && LX < 240) {
-        uint8_t col = ((LX - 80) + mem->read(SCX)) & 7;
-        uint8_t row = (mem->read(LY) + mem->read(SCY)) & 7;
+void gbppu::tick() {
+    scanlineAdvance();
+    if (LX == 0 && (pMem->read(STAT) & 0x03) == 0x02) {
+        spriteIndex = 0;
+        for (int si = 0; si < 40; si++) {
+            uint8_t y = pMem->read(OAM + si * 4) - 16;
+            if (pMem->read(LY) >= y && pMem->read(LY) < y + 8) {
+                spritesOnLine[spriteIndex++] = si;
+            }
+        }
+    }
+    if ((pMem->read(STAT) & 0x03) == 0x03) {
+        uint8_t c = 0;
         uint16_t pixelPalette = BGP;
-        uint8_t c = getBGMapPixel(mem, ((LX - 80) + mem->read(SCX)) / 8, (mem->read(LY) + mem->read(SCY)) / 8, col, row);
-        for (int i = 0; i < 40; i++) {
-            uint16_t x = mem->read(OAM + i * 4 + 1) - 8;
-            uint16_t y = mem->read(OAM + i * 4) - 16;
-            if ((LX - 80) >= x && mem->read(LY) >= y && (LX - 80) < x + 8 && mem->read(LY) < y + 8) {
+        /*if (TEST(pMem->read(LCDC), 5) && (LX - 80) >= pMem->read(WX) - 7 && pMem->read(LY) >= pMem->read(WY)) {
+            c = 3;
+        } else {*/
+        uint8_t col = ((LX - 80) + pMem->read(SCX)) & 7;
+        uint8_t row = (pMem->read(LY) + pMem->read(SCY)) & 7;
+        c = getBGMapPixel(((LX - 80) + pMem->read(SCX)) / 8, (pMem->read(LY) + pMem->read(SCY)) / 8, col, row);
+        //}
+        for (int i = 0; i < spriteIndex; i++) {
+            int16_t x = pMem->read(OAM + spritesOnLine[i] * 4 + 1) - 8;
+            int16_t y = pMem->read(OAM + spritesOnLine[i] * 4) - 16;
+            if ((LX - 80) >= x && pMem->read(LY) >= y && (LX - 80) < x + 8 && pMem->read(LY) < y + 8) {
                 uint8_t spriteX = (LX - 80) - x;
-                uint8_t spriteY = mem->read(LY) - y;
-                uint8_t tileIndex = mem->read(OAM + i * 4 + 2);
-                uint8_t attr = mem->read(OAM + i * 4 + 3);
+                uint8_t spriteY = pMem->read(LY) - y;
+                uint8_t tileIndex = pMem->read(OAM + spritesOnLine[i] * 4 + 2);
+                uint8_t attr = pMem->read(OAM + spritesOnLine[i] * 4 + 3);
                 if (TEST(attr, 7) && c != 0) {
                     continue;
                 }
@@ -125,79 +162,64 @@ void gbppu::tick(gbmem* mem) {
                 if (TEST(attr, 6)) {
                     spriteY = 7 - spriteY;
                 }
-                uint8_t tmp = getSpriteTilePixel(mem, tileIndex, spriteX, spriteY);
+                uint8_t tmp = getSpriteTilePixel(tileIndex, spriteX, spriteY);
                 if (tmp != 0) {
                     uint16_t pixelPalette = TEST(attr, 7)? OBP1 : OBP0;
                     c = tmp;
                 }
             }
         }
-        switch (c) {
-            case 0:
-                c = (TEST(mem->read(BGP), 1) << 1) | TEST(mem->read(BGP), 0);
-                break;
-            case 1:
-                c = (TEST(mem->read(BGP), 3) << 1) | TEST(mem->read(BGP), 2);
-                break;
-            case 2:
-                c = (TEST(mem->read(BGP), 5) << 1) | TEST(mem->read(BGP), 4);
-                break;
-            case 3:
-                c = (TEST(mem->read(BGP), 7) << 1) | TEST(mem->read(BGP), 6);
-                break;
-        }
-        buffer[(LX - 80) + mem->read(LY) * 160] = c;
+        buffer[(LX - 80) + pMem->read(LY) * 160] = CMAP(c, pixelPalette);
     }
 }
 
-void gbppu::scanlineAdvance(gbmem* mem) {
+void gbppu::scanlineAdvance() {
     LX++;
-    if (mem->read(LY) < 144) {
-        if (LX == 0) {
-            mem->write(STAT, (mem->read(STAT) & 0xFC) | 0x02);
-            if (TEST(mem->read(STAT), 5)) {
-                mem->write(0xFF0F, mem->read(0xFF0F) | 0x02);
-            }
-        } else if (LX == 80) {
-            mem->write(STAT, (mem->read(STAT) & 0xFC) | 0x03);
+    if (pMem->read(LY) < 144) {
+        if (LX == 80) {
+            pMem->write(STAT, (pMem->read(STAT) & 0xFC) | 0x03);
         } else if (LX == 248) {
-            mem->write(STAT, mem->read(STAT) & 0xFC);
-            if (TEST(mem->read(STAT), 3)) {
-                mem->write(0xFF0F, mem->read(0xFF0F) | 0x02);
+            pMem->write(STAT, pMem->read(STAT) & 0xFC);
+            if (TEST(pMem->read(STAT), 3)) {
+                pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x02);
             }
         }
-    } else if (mem->read(LY) == 144) {
-        mem->write(0xFF0F, mem->read(0xFF0F) | 0x01);
-        mem->write(STAT, (mem->read(STAT) & 0xFC) | 0x01);
-        if (TEST(mem->read(STAT), 4)) {
-            mem->write(0xFF0F, mem->read(0xFF0F) | 0x02);
+    } else if (pMem->read(LY) == 144) {
+        pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x01);
+        pMem->write(STAT, (pMem->read(STAT) & 0xFC) | 0x01);
+        if (TEST(pMem->read(STAT), 4)) {
+            pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x02);
         }
     }
     if (LX == 456) {
         LX = 0;
-        mem->write(LY, mem->read(LY) + 1);
-        if (mem->read(LY) == mem->read(LYC)) {
-            mem->write(STAT, mem->read(STAT) | 0x04);
-            if (TEST(mem->read(STAT), 6)) {
-                mem->write(0xFF0F, mem->read(0xFF0F) | 0x02);
+        pMem->write(STAT, (pMem->read(STAT) & 0xFC) | 0x02);
+        if (TEST(pMem->read(STAT), 5)) {
+            pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x02);
+        }
+        pMem->write(LY, pMem->read(LY) + 1);
+        if (pMem->read(LY) == pMem->read(LYC)) {
+            pMem->write(STAT, pMem->read(STAT) | 0x04);
+            if (TEST(pMem->read(STAT), 6)) {
+                pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x02);
             }
         } else {
-            mem->write(STAT, mem->read(STAT) & ~0x04);
+            pMem->write(STAT, pMem->read(STAT) & ~0x04);
         }
-        if (mem->read(LY) == 154) {
-            mem->write(LY, 0);
-            render(lastFrame);
+        if (pMem->read(LY) == 154) {
+            pMem->write(LY, 0);
+            render();
             frameCount++;
         }
     }
 }
 
-uint8_t gbppu::getBGMapPixel(gbmem* mem, uint16_t tx, uint16_t ty, uint8_t x, uint8_t y) {
+uint8_t gbppu::getBGMapPixel(uint16_t tx, uint16_t ty, uint8_t x, uint8_t y) {
     tx &= 0x1F;
     ty &= 0x1F;
-    uint16_t tilemap = getBGMapAddress(mem);
-    uint16_t tiles = getBGTileAddress(mem);
-    uint8_t tileIndex = mem->read(tilemap + tx + (ty * 32));
+    uint16_t tilemap = getBGMapAddress();
+    uint16_t tiles = getBGTileAddress();
+    uint8_t tileIndex = pMem->read(tilemap + tx + (ty * 32));
     if (tiles == 0x8800) {
         tileIndex += 0x80;
     }
@@ -205,61 +227,43 @@ uint8_t gbppu::getBGMapPixel(gbmem* mem, uint16_t tx, uint16_t ty, uint8_t x, ui
     uint8_t data[8][8];
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            data[i][j] = (TEST(mem->read(tile + (i * 2) + 1), 7 - j) << 1) | TEST(mem->read(tile + (i * 2)), 7 - j);
+            data[i][j] = (TEST(pMem->read(tile + (i * 2) + 1), 7 - j) << 1) | TEST(pMem->read(tile + (i * 2)), 7 - j);
         }
     }
     return data[y][x];
 }
 
-uint8_t gbppu::getTilePixel(gbmem* mem, uint16_t ti, uint8_t x, uint8_t y) {
+uint8_t gbppu::getTilePixel(uint16_t ti, uint8_t x, uint8_t y) {
     int tile = 0x8000 + ti * 16;
     uint8_t data[8][8];
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            data[i][j] = (TEST(mem->read(tile + (i * 2) + 1), 7 - j) << 1) | TEST(mem->read(tile + (i * 2)), 7 - j);
+            data[i][j] = (TEST(pMem->read(tile + (i * 2) + 1), 7 - j) << 1) | TEST(pMem->read(tile + (i * 2)), 7 - j);
         }
     }
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            switch (data[i][j]) {
-                case 0:
-                    data[i][j] = (TEST(mem->read(BGP), 1) << 1) | TEST(mem->read(BGP), 0);
-                    break;
-                case 1:
-                    data[i][j] = (TEST(mem->read(BGP), 3) << 1) | TEST(mem->read(BGP), 2);
-                    break;
-                case 2:
-                    data[i][j] = (TEST(mem->read(BGP), 5) << 1) | TEST(mem->read(BGP), 4);
-                    break;
-                case 3:
-                    data[i][j] = (TEST(mem->read(BGP), 7) << 1) | TEST(mem->read(BGP), 6);
-                    break;
-            }
-        }
-    }
-    return data[y][x];
+    return CMAP(data[y][x], BGP);
 }
 
-uint8_t gbppu::getSpriteTilePixel(gbmem* mem, uint8_t ti, uint8_t x, uint8_t y) {
+uint8_t gbppu::getSpriteTilePixel(uint8_t ti, uint8_t x, uint8_t y) {
     int tile = 0x8000 + ti * 16;
     uint8_t data[8][8];
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            data[i][j] = (TEST(mem->read(tile + (i * 2) + 1), 7 - j) << 1) | TEST(mem->read(tile + (i * 2)), 7 - j);
+            data[i][j] = (TEST(pMem->read(tile + (i * 2) + 1), 7 - j) << 1) | TEST(pMem->read(tile + (i * 2)), 7 - j);
         }
     }
     return data[y][x];
 }
 
-uint16_t gbppu::getBGTileAddress(gbmem* mem) {
-    if ((mem->read(LCDC) & 0x10) == 0x10) {
+uint16_t gbppu::getBGTileAddress() {
+    if ((pMem->read(LCDC) & 0x10) == 0x10) {
         return 0x8000;
     }
     return 0x8800;
 }
 
-uint16_t gbppu::getBGMapAddress(gbmem* mem) {
-    if ((mem->read(LCDC) & 0x08) == 0x08) {
+uint16_t gbppu::getBGMapAddress() {
+    if ((pMem->read(LCDC) & 0x08) == 0x08) {
         return 0x9C00;
     }
     return 0x9800;

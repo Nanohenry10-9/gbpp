@@ -36,7 +36,7 @@ public:
     bool wakeOnInterrupt, stop;
     uint16_t timer;
 
-    void init(SDL_Texture* screen);
+    void init(SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t);
 
     inline void setFlag(uint8_t f, bool s);
     inline bool flagSet(uint8_t f);
@@ -60,6 +60,13 @@ public:
 
     void tick();
     void dump(int n);
+
+    void add(uint8_t *r1, uint8_t r2);
+    void sub(uint8_t *r1, uint8_t r2);
+    void adc(uint8_t *r1, uint8_t r2);
+    void sbc(uint8_t *r1, uint8_t r2);
+    void cp(uint8_t *r1, uint8_t r2);
+
     void process();
     void update(uint64_t now);
 };

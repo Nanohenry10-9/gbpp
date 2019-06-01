@@ -42,24 +42,20 @@ void gbmem::init(string file) {
     DMAindex = 0;
     DMAinProgress = 0;
 
-    /*ifstream DMG_ROM("", ios::binary | ios::ate); // place boot ROM file's path here (disabled by default)
+    /*ifstream DMG_ROM("", ios::binary | ios::ate); // Place boot ROM file's path here (optional)
     DMG_ROM.seekg(0, ios::beg);
     DMG_ROM.read((char*)bootROM, 0x100);*/
 
-    if (file != "") {
-        SDL_Log("Loading %s", file.c_str());
+    SDL_Log("Loading %s", file.c_str());
 
-        ifstream ROMfile(file, ios::binary | ios::ate);
-        long size = ROMfile.tellg();
-        SDL_Log("File length is %d KiB, loading %d banks...", size / 1024, size / 0x4000);
-        ROMfile.seekg(0, ios::beg);
-        for (long i = 0; i < size / 0x4000; i++) {
-            ROMfile.seekg(i * 0x4000);
-            ROMfile.read((char*)ROMbanks[i], 0x4000);
-            banksLoaded++;
-        }
-    } else {
-        SDL_Log("No ROM loaded");
+    ifstream ROMfile(file, ios::binary | ios::ate);
+    long size = ROMfile.tellg();
+    SDL_Log("File length is %d KiB, loading %d banks...", size / 1024, size / 0x4000);
+    ROMfile.seekg(0, ios::beg);
+    for (long i = 0; i < size / 0x4000; i++) {
+        ROMfile.seekg(i * 0x4000);
+        ROMfile.read((char*)ROMbanks[i], 0x4000);
+        banksLoaded++;
     }
 }
 
@@ -109,6 +105,10 @@ void gbmem::write(int addr, uint8_t data) {
         DMAinProgress = 1;
     }
 
+    if (addr == 0xD804) {
+        SDL_Log("[Blargg]: Test set to %02X", data);
+    }
+
     if (addr == 0xFF04) {
         // reset whole timer!
         data = 0;
@@ -130,7 +130,7 @@ uint8_t gbmem::read(int addr) {
     if (addr < 0x4000) {
         return ROMbanks[0][addr];
     } else if (addr < 0x8000) {
-        return ROMbanks[ROMbank][addr - 0x4000];
+        return ROMbanks[ROMbank % banksLoaded][addr - 0x4000];
     } else if (addr >= 0xA000 && addr < 0xC000 && RAMmode) {
         return RAMbanks[RAMbank][addr - 0xA000];
     } else {

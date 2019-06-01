@@ -30,51 +30,19 @@
 
 using namespace std;
 
-uint8_t pulse12_5[8] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-uint8_t pulse25_0[8] = {0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-uint8_t pulse50_0[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00};
-uint8_t pulse75_0[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00};
+gbmem *aMem;
 
 SDL_AudioSpec want, have;
 SDL_AudioDeviceID dev;
 
-uint8_t *bufferPos = 0;
+uint16_t internalTimer = 0;
 
-void soundCallback(void* userdata, Uint8* stream, int len) {
-    for (int i = 0; i < len; i++) {
-        SDL_MixAudio(stream, bufferPos, len, SDL_MIX_MAXVOLUME);
-        bufferPos++;
-        if (bufferPos == &pulse50_0[8]) {
-            bufferPos = &pulse50_0[0];
-        }
-    }
+void gbapu::init(gbmem* cMem) {
+    aMem = cMem;
+
+    // nothing here yet :(
 }
 
-void gbapu::init() {
-    bufferPos = &pulse50_0[0];
-    SDL_memset(&want, 0, sizeof(want));
-    want.freq = 8 * 200;
-    want.format = AUDIO_U8;
-    want.channels = 1;
-    want.samples = 8;
-    want.callback = soundCallback;
-    dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, SDL_AUDIO_ALLOW_FORMAT_CHANGE);
-    SDL_Log("Opened device with freq=%d and samples=%d", have.freq, have.samples);
-    SDL_PauseAudio(0);
-    SDL_Delay(100);
-    switch (SDL_GetAudioStatus()) {
-        case SDL_AUDIO_PLAYING:
-            SDL_Log("Audio OK");
-            break;
-        case SDL_AUDIO_PAUSED:
-            SDL_Log("Audio paused");
-            break;
-        case SDL_AUDIO_STOPPED:
-            SDL_Log("Audio failed");
-            break;
-    }
-}
-
-void gbapu::tick(gbmem* mem, uint16_t timer) {
-
+void gbapu::tick(uint16_t timer) {
+    internalTimer = timer;
 }

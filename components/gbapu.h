@@ -1,6 +1,7 @@
 #include <iostream>
 #include "gbmem.h"
 #include <SDL.h>
+#include <cmath>
 
 using namespace std;
 
@@ -8,14 +9,12 @@ using namespace std;
 
 class gbapu {
 public:
-    uint8_t pulse12_5[8];
-    uint8_t pulse25_0[8];
-    uint8_t pulse50_0[8];
-    uint8_t pulse75_0[8];
+    gbmem *aMem;
+
     SDL_AudioSpec want, have;
     SDL_AudioDeviceID dev;
 
-    void init();
+    void init(gbmem* cMem);
 
-    void tick(gbmem* mem, uint16_t timer);
+    void tick(uint16_t timer);
 };

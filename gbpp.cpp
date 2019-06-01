@@ -18,26 +18,27 @@ int FPS = 60;
 long qpfStart = 0, appTicks = 0;
 bool finished = 0;
 SDL_Event event;
-SDL_Texture *screenTex, *tilemapTex;
-SDL_Renderer *renderer;
-SDL_Window *window;
+SDL_Texture *screenTex, *wholeBGTex, *tilemapTex;
+SDL_Renderer *mainRenderer, *debugRenderer;
+SDL_Window *mainWindow, *debugWindow;
+bool debugWin = 0;
 LARGE_INTEGER pf, li;
 uint64_t now;
 uint64_t lastLog = 0;
 const SDL_Rect screen = {0, 0, 160 * 4, 144 * 4};
-const SDL_Rect tilemap1 = {160 * 4 + 20, 0, 8 * 8 * 2, 32 * 8 * 2};
-const SDL_Rect tilemap2 = {160 * 4 + 8 * 8 * 2 + 20, 0, 8 * 8 * 2, 32 * 8};
+const SDL_Rect tilemap1 = {0, 0, 8 * 8 * 2, 32 * 8 * 2};
+const SDL_Rect tilemap2 = {8 * 8 * 2, 0, 8 * 8 * 2, 32 * 8};
+const SDL_Rect wholeBG = {8 * 8 * 4 + 20, 0, 32 * 8, 32 * 8};
 const SDL_Rect half1 = {0, 0, 8 * 8, 32 * 8};
 const SDL_Rect half2 = {0, 32 * 8, 8 * 8, 32 * 8};
 
 int main(int argv, char** args) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-    window = SDL_CreateWindow("gbpp", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 160 * 4 + 20 + 256 * 2, 144 * 4, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    screenTex = SDL_CreateTexture(renderer, SDL_GetWindowPixelFormat(window), SDL_TEXTUREACCESS_STREAMING, 160, 144);
-    tilemapTex = SDL_CreateTexture(renderer, SDL_GetWindowPixelFormat(window), SDL_TEXTUREACCESS_STREAMING, 8 * 8, 48 * 8);
-
-    cpu.init(screenTex);
+    mainWindow = SDL_CreateWindow("gbpp", 30, 50, 160 * 4, 144 * 4, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    mainRenderer = SDL_CreateRenderer(mainWindow, -1, SDL_RENDERER_ACCELERATED);
+    screenTex = SDL_CreateTexture(mainRenderer, SDL_GetWindowPixelFormat(mainWindow), SDL_TEXTUREACCESS_STREAMING, 160, 144);
+    
+    cpu.init(screenTex, tilemapTex, wholeBGTex);
 
     QueryPerformanceFrequency(&pf);
     sysFreq = double(pf.QuadPart);
@@ -53,7 +54,19 @@ int main(int argv, char** args) {
             } else if (event.type == SDL_KEYDOWN) {
                 string key = SDL_GetKeyName(event.key.keysym.sym);
                 bool p = 0;
-                if (key == "R") {
+                if (key == "D") {
+                    debugWin = !debugWin;
+                    if (debugWin) {
+                        debugWindow = SDL_CreateWindow("gbpp debug", 160 * 4 + 50, 50, 256 * 2 + 20, 144 * 4, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+                        debugRenderer = SDL_CreateRenderer(debugWindow, -1, SDL_RENDERER_ACCELERATED);
+                        tilemapTex = SDL_CreateTexture(debugRenderer, SDL_GetWindowPixelFormat(debugWindow), SDL_TEXTUREACCESS_STREAMING, 8 * 8, 48 * 8);
+                        wholeBGTex = SDL_CreateTexture(debugRenderer, SDL_GetWindowPixelFormat(debugWindow), SDL_TEXTUREACCESS_STREAMING, 32 * 8, 32 * 8);
+                        cpu.ppu.tm = tilemapTex;
+                        cpu.ppu.bg = wholeBGTex;
+                    } else {
+                        SDL_DestroyWindow(debugWindow);
+                    }
+                }if (key == "R") {
                     cpu.mem.ROMbank = 0;
                     cpu.REG_PC = 0;
                 } else if (key == "A") {
@@ -117,30 +130,33 @@ int main(int argv, char** args) {
             } else if (cpu.wakeOnInterrupt) {
                 sprintf(status, "gbpp | Waiting for interrupt");
             } else if (cpu.stop) {
-                sprintf(status, "gbpp | Waiting for button press");
+                sprintf(status, "gbpp | Waiting for input");
             } else {
-                sprintf(status, "gbpp | HALTED");
+                sprintf(status, "gbpp | Halted");
             }
-            SDL_SetWindowTitle(window, status);
+            SDL_SetWindowTitle(mainWindow, status);
             cpu.ticks = 0;
             cpu.ppu.frameCount = 0;
         }
 
         if (SDL_GetTicks() - lastDraw >= (1000.0 / FPS)) {
             lastDraw = SDL_GetTicks();
-            SDL_RenderClear(renderer);
 
             if ((cpu.mem.read(0xFF40) & 0x80) == 0x80) {
-                SDL_RenderCopy(renderer, screenTex, NULL, &screen); // screen
+                SDL_RenderClear(mainRenderer);
+                SDL_RenderCopy(mainRenderer, screenTex, NULL, &screen);
+                SDL_RenderPresent(mainRenderer);
             }
 
-            if (appTicks % FPS == 0) {
-                cpu.ppu.renderTilemap(tilemapTex, &cpu.mem); // tilemap
+            if (debugWin) {
+                SDL_RenderClear(debugRenderer);
+                cpu.ppu.renderTilemap();
+                SDL_RenderCopy(debugRenderer, tilemapTex, &half1, &tilemap1);
+                SDL_RenderCopy(debugRenderer, tilemapTex, &half2, &tilemap2);
+                SDL_RenderCopy(debugRenderer, wholeBGTex, NULL, &wholeBG);
+                SDL_RenderPresent(debugRenderer);
             }
-            SDL_RenderCopy(renderer, tilemapTex, &half1, &tilemap1);
-            SDL_RenderCopy(renderer, tilemapTex, &half2, &tilemap2);
 
-            SDL_RenderPresent(renderer);
             appTicks++;
         }
 
@@ -149,7 +165,9 @@ int main(int argv, char** args) {
 
     cpu.dump(5);
 
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
+    SDL_DestroyRenderer(mainRenderer);
+    SDL_DestroyRenderer(debugRenderer);
+    SDL_DestroyWindow(mainWindow);
+    SDL_DestroyWindow(debugWindow);
     SDL_Quit();
 }

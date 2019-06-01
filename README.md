@@ -1,8 +1,8 @@
 # gbpp (Game Boy Plus Plus)
 
-A Game Boy emulator written in C++, using SDL2 for the graphics, input and audio.
+A Game Boy emulator for Windows written in C++, using SDL2 for the graphics, input and audio.
 
-(Despite its name, it in no way attempts to be better than other emulators out there, it's just a fun project.)
+(Despite its name, it in no way attempts to be better than other emulators out there, it's just a fun little project.)
 
 ## Source code and building
 
@@ -15,36 +15,48 @@ g++ gbpp.cpp components\*.cpp -I"path/to/SDL-includes" -L"path/to/SDL-libraries"
 
 ## Accuracy
 
-Well, far from perfect.
+Emulation speed is accurate but some instructions are still incorrectly implemented and there is no sound yet.
 
-It passes some of blargg's instruction test ROMs but the `cpu_instrs` test crashes on test 02. It can run Super Mario Land, BGB's test ROM and some other games (mostly) fine, apart from a few minor graphical bugs and oddities.
+It passes some of blargg's instruction test ROMs but the `cpu_instrs` test crashes on test 03. It can run Super Mario Land, BGB's test ROM and some other games (mostly) fine, apart from a few minor graphical bugs and hangs.
 
-It runs most of the time at around 70% - 100% of full speed on an Intel Core i7-8550U at 1.80GHz, which is not ideal but fine for now.
+The emulated CPU runs most of the time at around 4MiHz on an Intel Core i7-8550U at 1.80GHz.
 
 ## User interface
 
-The UI has currently the emulated Game Boy's screen on the left and the whole background, window and sprite tile data on the right. The window is 1172x576 pixels, so if that does not fit your screen, please edit the window size in `gbpp.cpp` on line 35.
+The UI consists of two windows, one for the emulated Game Boy's screen and one for debug. The one for debug can be toggled on and off with **D**, however it is recommended to keep the debug window closed because it renders to whole tilemap and screen 30 times a second, which causes massive slow-downs. The main window's size is 640x576 pixels.
 
 ## Controls
 
 The controls are mapped to the following keys:
 
 | Keyboard key    | Game Boy button |
-| --------------- | ----------------|
+| --------------- | --------------- |
 | A               | A               |
 | S               | B               |
 | Arrow keys      | D-pad           |
 | Return          | Start           |
 | Backspace       | Select          |
 
-In addition, **R** resets the emulator to boot state (`PC = 0` with the first ROM bank selected).
+In addition, **R** resets the emulator to boot state (`PC = 0` with the first ROM bank selected) and **D** toggles the debug window.
 
-Right now these are hardcoded and cannot be configured (except by manually editing the source code).
+Right now these keys are hardcoded and cannot be configured (except by manually editing the source code).
 
 ## Audio
 
-The emulator does not do sound yet, though support is on its way (if only SDL audio would co-operate).
+The emulator does not do sound yet, though support is on its way (if only SDL audio would work on Windows the way it is supposed to :unamused:).
+
+## Things to add in the future
+
+* Fix the CPU, which has some opcodes slightly broken at the moment
+* Fix the PPU (not sure what is broken but e.g. _Is that a demo in your pocket_'s effects render badly)
+* Window support (essentially a second movable background layer)
+* Sound support, though I need to find an API for that (sound generation on Windows is quite bad apparently)
+* More debug options, such as an on-the-fly RAM reader/writer
 
 ## Assembler and disassembler
 
-Additionally there are two Python 3 scripts in the repository, one for assembling (`assembler.py`) and one for disassembling (`disassembler.py`). They both ask for source and destination files, and the disassembler accepts flags from the command line. Documentation on these two scripts will be provided soon.
+Additionally there are two Python 3 scripts in the repository, one for assembling (`assembler.py`) and one for disassembling (`disassembler.py`). They both ask for source and destination files, and the disassembler accepts flags from the command line. Documentation on these two scripts will be added soon.
+
+### Disassembler flags
+
+TODO.
