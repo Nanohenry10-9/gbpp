@@ -1,6 +1,4 @@
 #include "gbmem.h"
-#include <fstream>
-#include <SDL.h>
 
 #define BTN_A      0x0
 #define BTN_B      0x1
@@ -42,7 +40,7 @@ void gbmem::init(string file) {
     DMAindex = 0;
     DMAinProgress = 0;
 
-    /*ifstream DMG_ROM("", ios::binary | ios::ate); // Place boot ROM file's path here (optional)
+    /*ifstream DMG_ROM("", ios::binary | ios::ate);
     DMG_ROM.seekg(0, ios::beg);
     DMG_ROM.read((char*)bootROM, 0x100);*/
 
@@ -105,9 +103,9 @@ void gbmem::write(int addr, uint8_t data) {
         DMAinProgress = 1;
     }
 
-    if (addr == 0xD804) {
+    /*if (addr == 0xD804) {
         SDL_Log("[Blargg]: Test set to %02X", data);
-    }
+    }*/
 
     if (addr == 0xFF04) {
         // reset whole timer!

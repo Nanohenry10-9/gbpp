@@ -33,7 +33,7 @@ void gbcpu::init(SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t) {
     period = RES / freq;
     lastTick = 0;
     ticks = 0;
-    mem.init(""); // Place ROM file's path here
+    mem.init(""); // ROM file here
     ppu.init(&mem, screen, e, t);
     apu.init(&mem);
     REG_A = REG_B = REG_C = REG_D = REG_E = REG_F = REG_H = REG_L = 0;
@@ -276,6 +276,11 @@ void gbcpu::cp(uint8_t *r1, uint8_t r2) {
 }
 
 void gbcpu::process() {
+    /*if (REG_PC == 0xC4E0) {
+        SDL_Log("Dumping in 300 opcodes");
+        printTraceIn = 300;
+    }*/
+
     uint8_t opcode = mem.read(REG_PC++);
     uint8_t cycles = 0;
 
@@ -774,6 +779,10 @@ void gbcpu::process() {
             REG_B = REG_A;
             cycles = 1;
             break;
+        case 0x4C: // LD C,H
+            REG_C = REG_H;
+            cycles = 1;
+            break;
         case 0x54: // LD D,H
             REG_D = REG_H;
             cycles = 1;
@@ -789,6 +798,10 @@ void gbcpu::process() {
         case 0x5E: // LD E,(HL)
             REG_E = mem.read(getHL());
             cycles = 2;
+            break;
+        case 0x5C: // LD E,H
+            REG_E = REG_H;
+            cycles = 1;
             break;
         case 0x5D: // LD E,L
             REG_E = REG_L;
@@ -1700,6 +1713,11 @@ void gbcpu::process() {
                     setFlag(FLAG_N, 0);
                     setFlag(FLAG_H, 1);
                     break;
+                case 0x45: // BIT 0,L
+                    setFlag(FLAG_Z, (REG_L & 0x01) != 0x01);
+                    setFlag(FLAG_N, 0);
+                    setFlag(FLAG_H, 1);
+                    break;
                 case 0x46: // BIT 0,(HL)
                     setFlag(FLAG_Z, (mem.read(getHL()) & 0x01) != 0x01);
                     setFlag(FLAG_N, 0);
@@ -1834,6 +1852,9 @@ void gbcpu::process() {
                 case 0x87: // RES 0,A
                     REG_A &= ~0x01;
                     break;
+                case 0x8F: // RES 1,A
+                    REG_A &= ~0x02;
+                    break;
                 case 0x95: // RES 2,L
                     REG_L &= ~0x04;
                     break;
@@ -1901,7 +1922,8 @@ void gbcpu::update(uint64_t now) {
         elapsed = period;
     }
     lastTick = now;
-    while (elapsed > period) {
+    uint64_t loops = 0;
+    while (elapsed > period && loops++ < 100000) {
         tick();
         elapsed -= period;
     }

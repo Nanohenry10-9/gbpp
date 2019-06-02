@@ -1,7 +1,8 @@
 #include <iostream>
-#include "gbmem.h"
 #include <SDL.h>
 #include <cmath>
+#include <windows.h>
+#include "gbmem.h"
 
 using namespace std;
 
@@ -14,7 +15,7 @@ public:
     SDL_AudioSpec want, have;
     SDL_AudioDeviceID dev;
 
-    void init(gbmem* cMem);
+    void init(gbmem* mem);
 
     void tick(uint16_t timer);
 };

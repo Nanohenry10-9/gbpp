@@ -25,7 +25,7 @@ bool debugWin = 0;
 LARGE_INTEGER pf, li;
 uint64_t now;
 uint64_t lastLog = 0;
-const SDL_Rect screen = {0, 0, 160 * 4, 144 * 4};
+const SDL_Rect screen = {0, 0, 160 * 3, 144 * 3};
 const SDL_Rect tilemap1 = {0, 0, 8 * 8 * 2, 32 * 8 * 2};
 const SDL_Rect tilemap2 = {8 * 8 * 2, 0, 8 * 8 * 2, 32 * 8};
 const SDL_Rect wholeBG = {8 * 8 * 4 + 20, 0, 32 * 8, 32 * 8};
@@ -34,7 +34,7 @@ const SDL_Rect half2 = {0, 32 * 8, 8 * 8, 32 * 8};
 
 int main(int argv, char** args) {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-    mainWindow = SDL_CreateWindow("gbpp", 30, 50, 160 * 4, 144 * 4, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    mainWindow = SDL_CreateWindow("gbpp", 30, 50, 160 * 3, 144 * 3, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
     mainRenderer = SDL_CreateRenderer(mainWindow, -1, SDL_RENDERER_ACCELERATED);
     screenTex = SDL_CreateTexture(mainRenderer, SDL_GetWindowPixelFormat(mainWindow), SDL_TEXTUREACCESS_STREAMING, 160, 144);
     
@@ -57,7 +57,7 @@ int main(int argv, char** args) {
                 if (key == "D") {
                     debugWin = !debugWin;
                     if (debugWin) {
-                        debugWindow = SDL_CreateWindow("gbpp debug", 160 * 4 + 50, 50, 256 * 2 + 20, 144 * 4, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+                        debugWindow = SDL_CreateWindow("gbpp | debug", 160 * 4 + 50, 50, 256 * 2 + 20, 144 * 4, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
                         debugRenderer = SDL_CreateRenderer(debugWindow, -1, SDL_RENDERER_ACCELERATED);
                         tilemapTex = SDL_CreateTexture(debugRenderer, SDL_GetWindowPixelFormat(debugWindow), SDL_TEXTUREACCESS_STREAMING, 8 * 8, 48 * 8);
                         wholeBGTex = SDL_CreateTexture(debugRenderer, SDL_GetWindowPixelFormat(debugWindow), SDL_TEXTUREACCESS_STREAMING, 32 * 8, 32 * 8);
@@ -126,7 +126,7 @@ int main(int argv, char** args) {
             double cpuTicks = cpu.ticks * (elapsed / LOGRES) * (RES / LOGRES);
             char status[256];
             if (!cpu.halt) {
-                sprintf(status, "gbpp | %07.0fHz (%03.0f%) - PC: 0x%04X", cpuTicks, (cpuTicks / cpu.freq) * 100, cpu.REG_PC);
+                sprintf(status, "gbpp | %07.0fHz (%03.0f%)", cpuTicks, (cpuTicks / cpu.freq) * 100);
             } else if (cpu.wakeOnInterrupt) {
                 sprintf(status, "gbpp | Waiting for interrupt");
             } else if (cpu.stop) {
@@ -157,6 +157,9 @@ int main(int argv, char** args) {
                 SDL_RenderPresent(debugRenderer);
             }
 
+            if (appTicks % 4 == 0) {
+                SDL_PumpEvents();
+            }
             appTicks++;
         }
 

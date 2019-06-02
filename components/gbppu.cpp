@@ -37,8 +37,8 @@ gbmem *pMem;
 uint8_t spritesOnLine[10];
 uint8_t spriteIndex;
 
-void gbppu::init(gbmem* cMem, SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t) {
-    pMem = cMem;
+void gbppu::init(gbmem* mem, SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t) {
+    pMem = mem;
     LX = 0;
     frameCount = 0;
     debug = 0;
@@ -129,9 +129,12 @@ void gbppu::tick() {
     if (LX == 0 && (pMem->read(STAT) & 0x03) == 0x02) {
         spriteIndex = 0;
         for (int si = 0; si < 40; si++) {
-            uint8_t y = pMem->read(OAM + si * 4) - 16;
+            int16_t y = pMem->read(OAM + si * 4) - 16;
             if (pMem->read(LY) >= y && pMem->read(LY) < y + 8) {
                 spritesOnLine[spriteIndex++] = si;
+                if (spriteIndex == 10) {
+                    break;
+                }
             }
         }
     }
@@ -141,9 +144,9 @@ void gbppu::tick() {
         /*if (TEST(pMem->read(LCDC), 5) && (LX - 80) >= pMem->read(WX) - 7 && pMem->read(LY) >= pMem->read(WY)) {
             c = 3;
         } else {*/
-        uint8_t col = ((LX - 80) + pMem->read(SCX)) & 7;
-        uint8_t row = (pMem->read(LY) + pMem->read(SCY)) & 7;
-        c = getBGMapPixel(((LX - 80) + pMem->read(SCX)) / 8, (pMem->read(LY) + pMem->read(SCY)) / 8, col, row);
+            uint8_t col = ((LX - 80) + pMem->read(SCX)) & 7;
+            uint8_t row = (pMem->read(LY) + pMem->read(SCY)) & 7;
+            c = getBGMapPixel(((LX - 80) + pMem->read(SCX)) / 8, (pMem->read(LY) + pMem->read(SCY)) / 8, col, row);
         //}
         for (int i = 0; i < spriteIndex; i++) {
             int16_t x = pMem->read(OAM + spritesOnLine[i] * 4 + 1) - 8;

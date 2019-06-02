@@ -21,7 +21,7 @@ public:
     uint8_t spritesOnLine[10];
     uint8_t spriteIndex;
 
-    void init(gbmem* cMem, SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t);
+    void init(gbmem* mem, SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t);
     
     void render();
     void renderTilemap(); // This function is very resource-heavy, as it renders two 256x256 tilemaps.
