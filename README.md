@@ -1,6 +1,6 @@
 # gbpp (Game Boy Plus Plus)
 
-A Game Boy emulator for Windows written in C++, using SDL2 for the graphics, input and audio.
+A DMG Game Boy emulator for Windows written in C++, using SDL2 for the graphics, input and audio.
 
 (Despite its name, it in no way attempts to be better than other emulators out there, it's just a fun little project.)
 
