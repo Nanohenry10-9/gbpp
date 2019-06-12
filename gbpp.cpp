@@ -66,7 +66,7 @@ int main(int argv, char** args) {
                     } else {
                         SDL_DestroyWindow(debugWindow);
                     }
-                }if (key == "R") {
+                } else if (key == "R") {
                     cpu.mem.ROMbank = 0;
                     cpu.REG_PC = 0;
                 } else if (key == "A") {
