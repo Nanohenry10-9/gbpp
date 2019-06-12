@@ -276,11 +276,6 @@ void gbcpu::cp(uint8_t *r1, uint8_t r2) {
 }
 
 void gbcpu::process() {
-    /*if (REG_PC == 0xC4E0) {
-        SDL_Log("Dumping in 300 opcodes");
-        printTraceIn = 300;
-    }*/
-
     uint8_t opcode = mem.read(REG_PC++);
     uint8_t cycles = 0;
 
@@ -1195,9 +1190,6 @@ void gbcpu::process() {
             break;
         case 0xC2: // JP NZ,a16
             if (!flagSet(FLAG_Z)) {
-                if (mem.read16(REG_PC) == 0xC1B9) {
-                    SDL_Log("Failed at 0x%04X", REG_PC - 1);
-                }
                 REG_PC = mem.read16(REG_PC);
                 cycles = 4;
             } else {
