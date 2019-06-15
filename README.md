@@ -10,20 +10,24 @@ A DMG Game Boy emulator for Windows written in C++, using SDL2 for the graphics,
 
 Requires `SDL2` to be installed and `SDL2.dll` to be in the same directory as `gbpp.cpp`. It can then be compiled for Windows using MinGW with
 ```
-g++ gbpp.cpp components\*.cpp -I"path/to/SDL-includes" -L"path/to/SDL-libraries" -w -Wl,-subsystem,windows -lmingw32 -lSDL2main -lSDL2 -o gbpp -O2 -std=c++11
+g++ gbpp.cpp components\*.cpp -I"path/to/includes" -L"path/to/libraries" -lmingw32 -lSDL2main -lSDL2 -o gbpp -O3 -W -Wall -Wno-sign-compare -std=c++11
 ```
+
+gbpp can be run from the command line, and it accepts flags. The flag `--no-sound` will disable sound and `--rom [path]` will load the emulated ROM with the file at `[path]`. All other flags/options will be ignored.
 
 ## Accuracy
 
 Emulation speed is accurate but some instructions are still incorrectly implemented and audio is a bit here-and-there.
 
-It passes some of blargg's instruction test ROMs but the `cpu_instrs` test crashes on test 03. It can run Super Mario Land, BGB's test ROM and some other games (mostly) fine, apart from a few minor graphical bugs and hangs. Sound has some timing issues, e.g. the soundtracks in _Is that a demo in your pocket?_ and BGB's test ROM appear to play faster than usual (or it's my bad APU implementation).
+It passes some of blargg's instruction test ROMs but the `cpu_instrs` test crashes on test 03. It can run Super Mario Land, _Is that a demo in your pocket?_ and some other games or demos (mostly) fine, apart from a few bugs.
 
 The emulated CPU runs most of the time at around 4MiHz on an Intel Core i7-8550U at 1.80GHz.
 
 ## User interface
 
-The UI consists of two windows, one for the emulated Game Boy's screen and one for debug. The one for debug can be toggled on and off with **D**, however it is recommended to keep the debug window closed because it renders to whole tilemap and screen 60 times a second, which causes a lot of lag (though you can use this to your advantage and play the emulated game in slo-mo). The main window's size is 480x432 pixels, which is three times the resolution of the Game Boy's screen.
+gbpp's UI consists of two windows, one for the emulated Game Boy's screen and one for debug. The main window's size is 480x432 pixels, which is three times the resolution of the Game Boy's screen.
+
+In the debug window, gbpp renders the whole background (32x32 8x8 tiles, palette mapped) and the tilemap from addresses `8000h` to `9800h`. It also shows value for each register, the last interrupt that was serviced and the current selected ROM bank.
 
 ## Controls
 
