@@ -24,30 +24,39 @@ uint8_t REG_A, REG_B, REG_C, REG_D, REG_E, REG_F, REG_H, REG_L;
 uint16_t REG_PC, REG_SP;
 bool halt, IME, nextTickIME;
 int idleTicks;
-uint16_t serialDiv;
-bool wakeOnInterrupt, stop;
+uint16_t tickDiv;
+bool wakeOnInterrupt, stop, completeHalt, haltAfterInst;
 uint16_t timer;
+string lastInt;
 
-void gbcpu::init(SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t) {
+void gbcpu::reset() {
+    printTraceIn = -1ULL;
+    lastInt = "none";
+
+    halt = 0;
+    stop = 0;
+
+    mem.write(0xFF50, 0x01); // skip boot ROM (comment following lines to enable)
+    REG_PC = 0x0100;
+    REG_SP = 0xFFFE;
+    REG_A = 0x01;
+    REG_F = 0xB0;
+    REG_B = 0x00;
+    REG_C = 0x13;
+    REG_D = 0x00;
+    REG_E = 0xD8;
+    REG_H = 0x01;
+    REG_L = 0x4D;
+}
+
+void gbcpu::init(SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t, string r) {
     freq = 4194304;
     period = RES / freq;
-    lastTick = 0;
-    ticks = 0;
-    mem.init(""); // ROM file here
+    mem.init(r);
     ppu.init(&mem, screen, e, t);
     apu.init(&mem);
-    REG_A = REG_B = REG_C = REG_D = REG_E = REG_F = REG_H = REG_L = 0;
-    REG_PC = REG_SP = 0;
-    halt = 0, IME = 0;
-    idleTicks = 0;
-    serialDiv = 0;
-    wakeOnInterrupt = stop = 0;
-    timer = 0;
-
-    printTraceIn = -1ULL;
-
-    mem.write(0xFF50, mem.read(0xFF50) | 0x01); // skip boot ROM
-    REG_PC = 0x100;
+    
+    reset();
 }
 
 inline void gbcpu::setFlag(uint8_t f, bool s) {
@@ -102,8 +111,9 @@ inline uint8_t gbcpu::stackPop() {
 }
 
 void gbcpu::doInterrupts() {
-    if ((mem.read(0xFF0F) & 0x01) == 0x01) { // INT 40h
-        if ((mem.read(0xFFFF) & 0x01) == 0x01 && IME) {
+    if ((mem.read(0xFF0F) & 0x01) == 0x01 && (mem.read(0xFFFF) & 0x01) == 0x01) { // INT 40h
+        lastInt = "v-blank";
+        if (IME) {
             mem.write(0xFF0F, ~0x01 & mem.read(0xFF0F));
             IME = 0;
             stackPush(REG_PC >> 8);
@@ -114,8 +124,9 @@ void gbcpu::doInterrupts() {
             wakeOnInterrupt = 0;
             halt = 0;
         }
-    } else if ((mem.read(0xFF0F) & 0x02) == 0x02) { // INT 48h
-        if ((mem.read(0xFFFF) & 0x02) == 0x02 && IME) {
+    } else if ((mem.read(0xFF0F) & 0x02) == 0x02 && (mem.read(0xFFFF) & 0x02) == 0x02) { // INT 48h
+        lastInt = "lcd stat";
+        if (IME) {
             mem.write(0xFF0F, ~0x02 & mem.read(0xFF0F));
             IME = 0;
             stackPush(REG_PC >> 8);
@@ -126,8 +137,9 @@ void gbcpu::doInterrupts() {
             wakeOnInterrupt = 0;
             halt = 0;
         }
-    } else if ((mem.read(0xFF0F) & 0x04) == 0x04) { // INT 50h
-        if ((mem.read(0xFFFF) & 0x04) == 0x04 && IME) {
+    } else if ((mem.read(0xFF0F) & 0x04) == 0x04 && (mem.read(0xFFFF) & 0x04) == 0x04) { // INT 50h
+        lastInt = "timer";
+        if (IME) {
             mem.write(0xFF0F, ~0x04 & mem.read(0xFF0F));
             IME = 0;
             stackPush(REG_PC >> 8);
@@ -138,8 +150,9 @@ void gbcpu::doInterrupts() {
             wakeOnInterrupt = 0;
             halt = 0;
         }
-    } else if ((mem.read(0xFF0F) & 0x08) == 0x08) { // INT 58h
-        if ((mem.read(0xFFFF) & 0x08) == 0x08 && IME) {
+    } else if ((mem.read(0xFF0F) & 0x08) == 0x08 && (mem.read(0xFFFF) & 0x08) == 0x08) { // INT 58h
+        lastInt = "serial";
+        if (IME) {
             mem.write(0xFF0F, ~0x08 & mem.read(0xFF0F));
             IME = 0;
             stackPush(REG_PC >> 8);
@@ -150,8 +163,9 @@ void gbcpu::doInterrupts() {
             wakeOnInterrupt = 0;
             halt = 0;
         }
-    } else if ((mem.read(0xFF0F) & 0x10) == 0x10) { // INT 60h
-        if ((mem.read(0xFFFF) & 0x10) == 0x10 && IME) {
+    } else if ((mem.read(0xFF0F) & 0x10) == 0x10 && (mem.read(0xFFFF) & 0x10) == 0x10) { // INT 60h
+        lastInt = "joypad";
+        if (IME) {
             mem.write(0xFF0F, ~0x10 & mem.read(0xFF0F));
             IME = 0;
             stackPush(REG_PC >> 8);
@@ -189,36 +203,41 @@ void gbcpu::doDMA() {
 }
 
 void gbcpu::tick() {
-    serialDiv++;
-    if (serialDiv == 512) {
-        serialDiv = 0;
-        if (mem.bitsPending > 0) {
-            mem.write(0xFF01, (mem.read(0xFF01) << 1) | 1);
-            mem.bitsPending--;
-            if (mem.bitsPending == 0) {
-                mem.write(0xFF02, mem.read(0xFF02) & ~0x80);
-                mem.write(0xFF0F, mem.read(0xFF0F) | 0x08);
+    if (!completeHalt) {
+        tickDiv++;
+        if (tickDiv % 512 == 0) {
+            if (mem.bitsPending > 0) {
+                mem.write(0xFF01, (mem.read(0xFF01) << 1) | 1);
+                mem.bitsPending--;
+                if (mem.bitsPending == 0) {
+                    mem.write(0xFF02, mem.read(0xFF02) & ~0x80);
+                    mem.write(0xFF0F, mem.read(0xFF0F) | 0x08);
+                }
             }
         }
+        doInterrupts();
+        updateTimer();
+        doDMA();
+        ppu.tick();
+        apu.tick(timer);
+        if (nextTickIME) {
+            nextTickIME = 0;
+            IME = 1;
+        }
+        if (halt || stop) {
+            return;
+        }
+        ticks++;
+        if (idleTicks) {
+            idleTicks--;
+            return;
+        }
+        process();
+        if (haltAfterInst) {
+            haltAfterInst = 0;
+            completeHalt = 1;
+        }
     }
-    doInterrupts();
-    updateTimer();
-    doDMA();
-    ppu.tick();
-    apu.tick(timer);
-    if (nextTickIME) {
-        nextTickIME = 0;
-        IME = 1;
-    }
-    if (halt) {
-        return;
-    }
-    ticks++;
-    if (idleTicks > 0) {
-        idleTicks--;
-        return;
-    }
-    process();
 }
 
 void gbcpu::dump(int n) {
@@ -276,6 +295,11 @@ void gbcpu::cp(uint8_t *r1, uint8_t r2) {
 }
 
 void gbcpu::process() {
+    /*if (REG_PC == 0x02D6) {
+        SDL_Log("Dumping in 300 opcodes");
+        printTraceIn = 300;
+    }*/
+
     uint8_t opcode = mem.read(REG_PC++);
     uint8_t cycles = 0;
 
@@ -517,6 +541,12 @@ void gbcpu::process() {
             break;
         case 0x20: // JR NZ,r8
             if (!flagSet(FLAG_Z)) {
+                if (REG_PC - 1 >= 0x0479 && REG_PC - 1 <= 0x04B1) {
+                    /*SDL_Log("Branched at 0x%04X", REG_PC - 1);
+                    if (REG_PC - 1 == 0x047C) {
+                        SDL_Log("A: 0x%02X", REG_A);
+                    }*/
+                }
                 REG_PC += (int8_t)mem.read(REG_PC);
                 REG_PC++;
                 cycles = 3;
@@ -532,6 +562,7 @@ void gbcpu::process() {
             break;
         case 0x22: // LD (HL+),A (increments HL in the case below)
             mem.write(getHL(), REG_A);
+            [[fallthrough]];
         case 0x23: // INC HL
             REG_L++;
             if (REG_L == 0x00) {
@@ -790,6 +821,10 @@ void gbcpu::process() {
             REG_D = REG_A;
             cycles = 1;
             break;
+        case 0x58: // LD E,B
+            REG_E = REG_B;
+            cycles = 1;
+            break;
         case 0x5E: // LD E,(HL)
             REG_E = mem.read(getHL());
             cycles = 2;
@@ -810,8 +845,20 @@ void gbcpu::process() {
             REG_H = REG_B;
             cycles = 1;
             break;
+        case 0x61: // LD H,C
+            REG_H = REG_C;
+            cycles = 1;
+            break;
         case 0x62: // LD H,D
             REG_H = REG_D;
+            cycles = 1;
+            break;
+        case 0x63: // LD H,E
+            REG_H = REG_E;
+            cycles = 1;
+            break;
+        case 0x65: // LD H,L
+            REG_H = REG_L;
             cycles = 1;
             break;
         case 0x66: // LD H,(HL)
@@ -820,6 +867,10 @@ void gbcpu::process() {
             break;
         case 0x67: // LD H,A
             REG_H = REG_A;
+            cycles = 1;
+            break;
+        case 0x68: // LD L,B
+            REG_L = REG_B;
             cycles = 1;
             break;
         case 0x69: // LD L,C
@@ -1190,6 +1241,9 @@ void gbcpu::process() {
             break;
         case 0xC2: // JP NZ,a16
             if (!flagSet(FLAG_Z)) {
+                if (mem.read16(REG_PC) == 0xC1B9) {
+                    //SDL_Log("Failed at 0x%04X", REG_PC - 1);
+                }
                 REG_PC = mem.read16(REG_PC);
                 cycles = 4;
             } else {
@@ -1233,6 +1287,9 @@ void gbcpu::process() {
             break;
         case 0xC8: // RET Z
             if (flagSet(FLAG_Z)) {
+                if (REG_PC - 1 == 0x04B5) {
+                    //SDL_Log("Returned at 04B5h (flags: %02X, B: %02X)", REG_F, REG_B);
+                }
                 REG_PC = stackPop() | (stackPop() << 8);
                 cycles = 5;
             } else {
@@ -1268,6 +1325,9 @@ void gbcpu::process() {
             stackPush(REG_PC >> 8);
             stackPush(REG_PC & 0xFF);
             REG_PC = mem.read16(REG_PC - 2);
+            if (REG_PC == 0x02F8) {
+                //SDL_Log("Called branchpoint");
+            }
             cycles = 6;
             break;
         case 0xCE: // ADC A,d8
@@ -1349,6 +1409,15 @@ void gbcpu::process() {
             nextTickIME = 1;
             cycles = 4;
             break;
+        case 0xDA: // JP C,a16
+            if (flagSet(FLAG_C)) {
+                REG_PC = mem.read16(REG_PC);
+                cycles = 4;
+            } else {
+                REG_PC += 2;
+                cycles = 3;
+            }
+            break;
         case 0xDC: // CALL C,a16
             REG_PC += 2;
             if (flagSet(FLAG_C)) {
@@ -1376,6 +1445,9 @@ void gbcpu::process() {
             cycles = 4;
             break;
         case 0xE0: // LD (FF00h+a8),A
+            if (mem.read(REG_PC) == 0xA6) {
+                //SDL_Log("Wait timer set to 0x%02X", REG_A);
+            }
             mem.write(0xFF00 + mem.read(REG_PC++), REG_A);
             cycles = 3;
             break;
@@ -1416,6 +1488,9 @@ void gbcpu::process() {
             cycles = 4;
             break;
         case 0xE9: // JP (HL)
+            if (REG_PC - 1 == 0x0033) {
+                //SDL_Log("Jumped to 0x%04X from 0x0033", getHL());
+            }
             REG_PC = getHL();
             cycles = 1;
             break;
@@ -1469,7 +1544,7 @@ void gbcpu::process() {
             cycles = 4;
             break;
         case 0xF8: // LD HL,SP+r8
-            setFlags(0, 0, (REG_SP + (int8_t)mem.read(REG_PC)) & 0x1FF == 0x1FF, (REG_SP + (int8_t)mem.read(REG_PC)) & 0x10000 == 0x10000);
+            setFlags(0, 0, ((REG_SP + (int8_t)mem.read(REG_PC)) & 0x1FF) == 0x1FF, ((REG_SP + (int8_t)mem.read(REG_PC)) & 0x10000) == 0x10000);
             loadHL(REG_SP + (int8_t)mem.read(REG_PC++));
             cycles = 3;
             break;
@@ -1655,6 +1730,32 @@ void gbcpu::process() {
                     setFlag(FLAG_N, 0);
                     setFlag(FLAG_H, 0);
                     break;
+                case 0x1C: // RR H
+                    {
+                        bool tmp = flagSet(FLAG_C);
+                        setFlag(FLAG_C, (REG_H & 0x01) == 0x01);
+                        REG_H >>= 1;
+                        REG_H |= tmp << 7;
+                    }
+                    setFlag(FLAG_Z, REG_H == 0);
+                    setFlag(FLAG_N, 0);
+                    setFlag(FLAG_H, 0);
+                    break;
+                case 0x1D: // RR L
+                    {
+                        bool tmp = flagSet(FLAG_C);
+                        setFlag(FLAG_C, (REG_L & 0x01) == 0x01);
+                        REG_L >>= 1;
+                        REG_L |= tmp << 7;
+                    }
+                    setFlag(FLAG_Z, REG_L == 0);
+                    setFlag(FLAG_N, 0);
+                    setFlag(FLAG_H, 0);
+                    break;
+                case 0x20: // SLA B
+                    setFlags((REG_B << 1) == 0, 0, 0, (REG_B & 0x80) == 0x80);
+                    REG_B <<= 1;
+                    break;
                 case 0x23: // SLA E
                     setFlags((REG_E << 1) == 0, 0, 0, (REG_E & 0x80) == 0x80);
                     REG_E <<= 1;
@@ -1690,6 +1791,14 @@ void gbcpu::process() {
                 case 0x38: // SRL B
                     setFlags((REG_B >> 1) == 0, 0, 0, (REG_B & 0x01) == 0x01);
                     REG_B >>= 1;
+                    break;
+                case 0x3C: // SRL H
+                    setFlags((REG_H >> 1) == 0, 0, 0, (REG_H & 0x01) == 0x01);
+                    REG_H >>= 1;
+                    break;
+                case 0x3D: // SRL L
+                    setFlags((REG_L >> 1) == 0, 0, 0, (REG_L & 0x01) == 0x01);
+                    REG_L >>= 1;
                     break;
                 case 0x3F: // SRL A
                     setFlags((REG_A >> 1) == 0, 0, 0, (REG_A & 0x01) == 0x01);
@@ -1850,11 +1959,17 @@ void gbcpu::process() {
                 case 0x95: // RES 2,L
                     REG_L &= ~0x04;
                     break;
+                case 0x9F: // RES 3,A
+                    REG_A &= ~0x08;
+                    break;
                 case 0xA7: // RES 4,A
                     REG_A &= ~0x10;
                     break;
                 case 0xAE: // RES 5,(HL)
                     mem.write(getHL(), mem.read(getHL()) & ~0x20);
+                    break;
+                case 0xB7: // RES 6,A
+                    REG_A &= ~0x40;
                     break;
                 case 0xBE: // RES 7,(HL)
                     mem.write(getHL(), mem.read(getHL()) & ~0x80);
@@ -1876,6 +1991,9 @@ void gbcpu::process() {
                     break;
                 case 0xEE: // SET 5,(HL)
                     mem.write(getHL(), mem.read(getHL()) | 0x20);
+                    break;
+                case 0xF7: // SET 6,A
+                    REG_A |= 0x40;
                     break;
                 case 0xFE: // SET 7,(HL)
                     mem.write(getHL(), mem.read(getHL()) | 0x80);

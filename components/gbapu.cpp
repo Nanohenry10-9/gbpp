@@ -36,29 +36,31 @@ using namespace std;
 
 gbmem *aMem;
 
+bool disable, prevDis;
+
 SDL_AudioSpec want, have;
 SDL_AudioDeviceID dev;
 
-uint16_t internalTimer = 0;
-int sampleIndex = 0;
+uint16_t internalTimer;
+int sampleIndex;
 
-double pulse1V = 0;
-double pulse2V = 0;
-double pulse1F = 200, pulse2F = 202;
-double pulse1P = 0.5, pulse2P = 0.5;
+double pulse1V;
+double pulse2V;
+double pulse1F, pulse2F;
+double pulse1P , pulse2P;
 uint16_t prevP1F, prevP2F;
 
-uint8_t waveS = 0;
-double waveF = 0;
+uint8_t waveS;
+double waveF;
 uint16_t prevWF;
 uint8_t waveBuffer[32];
 
-double noiseV = 0;
-double noiseF = 0;
-uint8_t noiseDiv = 0;
-uint8_t noiseB = 7;
+double noiseV;
+double noiseF;
+uint8_t noiseDiv;
+uint8_t noiseB;
 uint16_t prevNF;
-bool noiseLevel = 0;
+bool noiseLevel;
 uint16_t lfsr;
 
 #define UNIT 1000000.0
@@ -77,7 +79,7 @@ static uint8_t getWave(int time, double f) {
     return waveBuffer[int(double(time % int(UNIT / f)) / (UNIT / f) * 32)];
 }
 
-static void tickLFSR() {
+/*static void tickLFSR() {
     bool f = (lfsr & 1) ^ ((lfsr & 2) >> 1);
     lfsr >>= 1;
     lfsr |= (f << 14);
@@ -85,7 +87,7 @@ static void tickLFSR() {
         lfsr |= (f << 6);
     }
     noiseLevel = !(lfsr & 1);
-}
+}*/
 
 void audioCallback(void *userData, uint8_t *rawBuffer, int bytes) {
     int &sampleIndex = *(int*)userData;
@@ -106,7 +108,7 @@ void audioCallback(void *userData, uint8_t *rawBuffer, int bytes) {
             /*if (int(time * UNIT) % int(UNIT / noiseF) == 0) {
                 tickLFSR();
             }*/
-            noise = (rand() & 0x0FFF) * noiseV;//double(noiseLevel * (0xFFFF >> 4)) * noiseV;
+            noise = ((rand() & 1) * 0x0FFF) * noiseV;//double(noiseLevel * (0xFFFF >> 4)) * noiseV;
         }
         buffer[i] = pulse1 + pulse2 + wave + noise;
     }
@@ -126,6 +128,8 @@ void gbapu::init(gbmem* mem) {
         SDL_Log("Failed to open audio: %s", SDL_GetError());
     }
 
+    noiseB = 7;
+
     lfsr = rand() & 0xFFFF;
 
     SDL_PauseAudio(0);
@@ -136,6 +140,15 @@ const uint8_t waveShifts[4] = {4, 0, 1, 2};
 const uint8_t noiseDivisors[8] = {8, 16, 32, 48, 64, 80, 96, 112};
 
 void gbapu::tick(uint16_t timer) {
+    if (disable && !prevDis) {
+        SDL_PauseAudio(1);
+        SDL_Log("Audio stopped");
+    } else if (!disable && prevDis) {
+        SDL_PauseAudio(0);
+        SDL_Log("Audio started");
+    }
+    prevDis = disable;
+
     internalTimer = timer;
 
     if (TEST(aMem->read(NR14), 7)) {
@@ -146,26 +159,24 @@ void gbapu::tick(uint16_t timer) {
             aMem->write(NR11, aMem->read(NR11) | 0b00111111);
         }
     }
-    if (pulse1V > 0) {
-        pulse1P = dutyCycles[(aMem->read(NR11) & 0xC0) >> 6];
-        int rawFreq1 = aMem->read(NR13) | ((aMem->read(NR14) & 0b0111) << 8);
-        if (prevP1F != rawFreq1) {
-            pulse1F = 131072.0 / (2048 - rawFreq1);
+    pulse1P = dutyCycles[(aMem->read(NR11) & 0xC0) >> 6];
+    int rawFreq1 = aMem->read(NR13) | ((aMem->read(NR14) & 0b0111) << 8);
+    if (prevP1F != rawFreq1) {
+        pulse1F = 131072.0 / (2048 - rawFreq1);
+    }
+    prevP1F = rawFreq1;
+    if (TEST(aMem->read(NR14), 6) && internalTimer % 16384 == 0) { // duration counter
+        if ((aMem->read(NR11) & 0b00111111) > 0) {
+            aMem->write(NR11, (aMem->read(NR11) & 0b11000000) | ((aMem->read(NR11) & 0b00111111) - 1));
+        } else {
+            pulse1V = 0;
+            aMem->write(NR52, aMem->read(NR52) & ~0x01);
         }
-        prevP1F = rawFreq1;
-        if (TEST(aMem->read(NR14), 6) && internalTimer % 16384 == 0) {
-            if ((aMem->read(NR11) & 0b00111111) > 0) {
-                aMem->write(NR11, (aMem->read(NR11) & 0b11000000) | ((aMem->read(NR11) & 0b00111111) - 1));
-            } else {
-                pulse1V = 0;
-                aMem->write(NR52, aMem->read(NR52) & ~0x01);
-            }
-        }
-        if (internalTimer == 0 && (aMem->read(NR12) & 0b0111) != 0) {
-            double newVol = pulse1V + ((aMem->read(NR12) & 0b1000)? (1.0 / 15.0) : -(1.0 / 15.0));
-            if (newVol >= 0 && newVol <= 1) {
-                pulse1V = newVol;
-            }
+    }
+    if (internalTimer == 0 && (aMem->read(NR12) & 0b0111) != 0) { // volume sweep
+        double newVol = pulse1V + ((aMem->read(NR12) & 0b1000)? (1.0 / 15.0) : -(1.0 / 15.0));
+        if (newVol >= 0 && newVol <= 1) {
+            pulse1V = newVol;
         }
     }
 
@@ -177,26 +188,24 @@ void gbapu::tick(uint16_t timer) {
             aMem->write(NR21, aMem->read(NR21) | 0b00111111);
         }
     }
-    if (pulse2V > 0) {
-        pulse2P = dutyCycles[(aMem->read(NR21) & 0xC0) >> 6];
-        int rawFreq2 = aMem->read(NR23) | ((aMem->read(NR24) & 0b0111) << 8);
-        if (prevP2F != rawFreq2) {
-            pulse2F = 131072.0 / (2048 - rawFreq2);
+    pulse2P = dutyCycles[(aMem->read(NR21) & 0xC0) >> 6];
+    int rawFreq2 = aMem->read(NR23) | ((aMem->read(NR24) & 0b0111) << 8);
+    if (prevP2F != rawFreq2) {
+        pulse2F = 131072.0 / (2048 - rawFreq2);
+    }
+    prevP2F = rawFreq2;
+    if (TEST(aMem->read(NR24), 6) && internalTimer % 16384 == 0) {
+        if ((aMem->read(NR21) & 0b00111111) > 0) {
+            aMem->write(NR21, (aMem->read(NR21) & 0b11000000) | ((aMem->read(NR21) & 0b00111111) - 1));
+        } else {
+            pulse2V = 0;
+            aMem->write(NR52, aMem->read(NR52) & ~0x02);
         }
-        prevP2F = rawFreq2;
-        if (TEST(aMem->read(NR24), 6) && internalTimer % 16384 == 0) {
-            if ((aMem->read(NR21) & 0b00111111) > 0) {
-                aMem->write(NR21, (aMem->read(NR21) & 0b11000000) | ((aMem->read(NR21) & 0b00111111) - 1));
-            } else {
-                pulse2V = 0;
-                aMem->write(NR52, aMem->read(NR52) & ~0x02);
-            }
-        }
-        if (internalTimer == 0 && (aMem->read(NR22) & 0b0111) != 0) {
-            double newVol = pulse2V + ((aMem->read(NR22) & 0b1000)? (1.0 / 15.0) : -(1.0 / 15.0));
-            if (newVol >= 0 && newVol <= 1) {
-                pulse2V = newVol;
-            }
+    }
+    if (internalTimer == 0 && (aMem->read(NR22) & 0b0111) != 0) {
+        double newVol = pulse2V + ((aMem->read(NR22) & 0b1000)? (1.0 / 15.0) : -(1.0 / 15.0));
+        if (newVol >= 0 && newVol <= 1) {
+            pulse2V = newVol;
         }
     }
 
@@ -224,29 +233,27 @@ void gbapu::tick(uint16_t timer) {
             aMem->write(NR41, aMem->read(NR41) | 0b00111111);
         }
     }
-    if (noiseV > 0) {
-        uint8_t rawFreq4 = aMem->read(NR43);
-        if (prevNF != rawFreq4) {
-            noiseF = 524288.0 / max(double(rawFreq4 & 0b0111), 0.5) / pow(((rawFreq4 & 0b11110000) >> 4) + 1, 2);
-            noiseDiv = (rawFreq4 & 0b11110000) >> 4;
-        }
-        prevNF = rawFreq4;
-        if (TEST(aMem->read(NR44), 6) && internalTimer % 16384 == 0) {
-            if ((aMem->read(NR41) & 0b00111111) > 0) {
-                aMem->write(NR41, (aMem->read(NR41) & 0b11000000) | ((aMem->read(NR41) & 0b00111111) - 1));
-            } else {
-                noiseV = 0;
-                aMem->write(NR52, aMem->read(NR52) & ~0x08);
-            }
-        }
-        if (internalTimer == 0 && (aMem->read(NR42) & 0b0111) != 0) {
-            double newVol = noiseV + ((aMem->read(NR42) & 0b1000)? (1.0 / 15.0) : -(1.0 / 15.0));
-            if (newVol >= 0 && newVol <= 1) {
-                noiseV = newVol;
-            }
-        }
-        /*if (internalTimer % int(4194304.0 / noiseF) == 0) {
-            tickLFSR();
-        }*/
+    uint8_t rawFreq4 = aMem->read(NR43);
+    if (prevNF != rawFreq4) {
+        noiseF = 524288.0 / max(double(rawFreq4 & 0b0111), 0.5) / pow(((rawFreq4 & 0b11110000) >> 4) + 1, 2);
+        noiseDiv = (rawFreq4 & 0b11110000) >> 4;
     }
+    prevNF = rawFreq4;
+    if (TEST(aMem->read(NR44), 6) && internalTimer % 16384 == 0) {
+        if ((aMem->read(NR41) & 0b00111111) > 0) {
+            aMem->write(NR41, (aMem->read(NR41) & 0b11000000) | ((aMem->read(NR41) & 0b00111111) - 1));
+        } else {
+            noiseV = 0;
+            aMem->write(NR52, aMem->read(NR52) & ~0x08);
+        }
+    }
+    if (internalTimer == 0 && (aMem->read(NR42) & 0b0111) != 0) {
+        double newVol = noiseV + ((aMem->read(NR42) & 0b1000)? (1.0 / 15.0) : -(1.0 / 15.0));
+        if (newVol >= 0 && newVol <= 1) {
+            noiseV = newVol;
+        }
+    }
+    /*if (internalTimer % int(4194304.0 / noiseF) == 0) {
+        tickLFSR();
+    }*/
 }

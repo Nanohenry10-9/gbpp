@@ -24,7 +24,7 @@ public:
     void init(gbmem* mem, SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t);
     
     void render();
-    void renderTilemap(); // This function is very resource-heavy, as it renders two 256x256 tilemaps.
+    void renderTilemap();
 
     void tick();
 

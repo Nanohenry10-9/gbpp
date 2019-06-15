@@ -19,11 +19,12 @@ using namespace std;
 #define OAM  0xFE00
 #define VRAM 0x8000
 
-#define CMAP(c, p) ((TEST(pMem->read(p), (c * 2 + 1)) << 1) | TEST(pMem->read(p), (c * 2)))
+#define CMAP(c, p) ((TEST(pMem->read(p), ((c) * 2 + 1)) << 1) | TEST(pMem->read(p), ((c) * 2)))
 
-#define TEST(v, b) ((v & (1 << b)) == (1 << b))
+#define TEST(v, b) (((v) & (1 << (b))) == (1 << (b)))
 
 const uint8_t palette[4][3] = {{0xAC, 0xB5, 0x6B}, {0x76, 0x84, 0x48}, {0x3F, 0x50, 0x3F}, {0x24, 0x31, 0x37}};
+//const uint8_t palette[4][3] = {{0xFF, 0x00, 0x00}, {0x00, 0xFF, 0x00}, {0x00, 0x00, 0xFF}, {0xFF, 0xFF, 0x00}};
 
 uint16_t LX;
 double frameCount;
@@ -39,11 +40,7 @@ uint8_t spriteIndex;
 
 void gbppu::init(gbmem* mem, SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t) {
     pMem = mem;
-    LX = 0;
-    frameCount = 0;
-    debug = 0;
     lastFrame = screen;
-    spriteIndex = 0;
     tm = e;
     bg = t;
 }
@@ -100,25 +97,25 @@ void gbppu::renderTilemap() {
         uint8_t r = ((bgMap[x + scy * 32 * 8] & 0x00FF0000) >> 16) >> 2;
         uint8_t g = ((bgMap[x + scy * 32 * 8] & 0x0000FF00) >> 8) >> 2;
         uint8_t b = (bgMap[x + scy * 32 * 8] & 0x000000FF) >> 2;
-        bgMap[x + scy * 32 * 8] = 0xFF000000 | (r << 16) || (g << 8) || b;
+        bgMap[x + scy * 32 * 8] = 0xFF000000 | (r << 16) | (g << 8) | b;
     }
     for (uint8_t y = scy + 2; y != ((scy + 144) & 0xFF); y += 2) {
         uint8_t r = ((bgMap[scx + y * 32 * 8] & 0x00FF0000) >> 16) >> 2;
         uint8_t g = ((bgMap[scx + y * 32 * 8] & 0x0000FF00) >> 8) >> 2;
         uint8_t b = (bgMap[scx + y * 32 * 8] & 0x000000FF) >> 2;
-        bgMap[scx + y * 32 * 8] = 0xFF000000 | (r << 16) || (g << 8) || b;
+        bgMap[scx + y * 32 * 8] = 0xFF000000 | (r << 16) | (g << 8) | b;
     }
     for (uint8_t x = scx; x != ((scx + 160) & 0xFF); x += 2) {
         uint8_t r = ((bgMap[x + ((scy + 144) & 0xFF) * 32 * 8] & 0x00FF0000) >> 16) >> 2;
         uint8_t g = ((bgMap[x + ((scy + 144) & 0xFF) * 32 * 8] & 0x0000FF00) >> 8) >> 2;
         uint8_t b = (bgMap[x + ((scy + 144) & 0xFF) * 32 * 8] & 0x000000FF) >> 2;
-        bgMap[x + ((scy + 144) & 0xFF) * 32 * 8] = 0xFF000000 | (r << 16) || (g << 8) || b;
+        bgMap[x + ((scy + 144) & 0xFF) * 32 * 8] = 0xFF000000 | (r << 16) | (g << 8) | b;
     }
     for (uint8_t y = scy; y != ((scy + 146) & 0xFF); y += 2) {
         uint8_t r = ((bgMap[((scx + 160) & 0xFF) + y * 32 * 8] & 0x00FF0000) >> 16) >> 2;
         uint8_t g = ((bgMap[((scx + 160) & 0xFF) + y * 32 * 8] & 0x0000FF00) >> 8) >> 2;
         uint8_t b = (bgMap[((scx + 160) & 0xFF) + y * 32 * 8] & 0x000000FF) >> 2;
-        bgMap[((scx + 160) & 0xFF) + y * 32 * 8] = 0xFF000000 | (r << 16) || (g << 8) || b;
+        bgMap[((scx + 160) & 0xFF) + y * 32 * 8] = 0xFF000000 | (r << 16) | (g << 8) | b;
     }
     SDL_UpdateTexture(tm, NULL, &map, 8 * 8 * 4);
     SDL_UpdateTexture(bg, NULL, &bgMap, 32 * 8 * 4);
@@ -144,9 +141,9 @@ void gbppu::tick() {
         /*if (TEST(pMem->read(LCDC), 5) && (LX - 80) >= pMem->read(WX) - 7 && pMem->read(LY) >= pMem->read(WY)) {
             c = 3;
         } else {*/
-            uint8_t col = ((LX - 80) + pMem->read(SCX)) & 7;
-            uint8_t row = (pMem->read(LY) + pMem->read(SCY)) & 7;
-            c = getBGMapPixel(((LX - 80) + pMem->read(SCX)) / 8, (pMem->read(LY) + pMem->read(SCY)) / 8, col, row);
+        uint8_t col = ((LX - 80) + pMem->read(SCX)) & 7;
+        uint8_t row = (pMem->read(LY) + pMem->read(SCY)) & 7;
+        c = getBGMapPixel(((LX - 80) + pMem->read(SCX)) / 8, (pMem->read(LY) + pMem->read(SCY)) / 8, col, row);
         //}
         for (int i = 0; i < spriteIndex; i++) {
             int16_t x = pMem->read(OAM + spritesOnLine[i] * 4 + 1) - 8;
@@ -167,7 +164,7 @@ void gbppu::tick() {
                 }
                 uint8_t tmp = getSpriteTilePixel(tileIndex, spriteX, spriteY);
                 if (tmp != 0) {
-                    uint16_t pixelPalette = TEST(attr, 7)? OBP1 : OBP0;
+                    pixelPalette = TEST(attr, 4)? OBP1 : OBP0;
                     c = tmp;
                 }
             }
@@ -187,12 +184,6 @@ void gbppu::scanlineAdvance() {
                 pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x02);
             }
         }
-    } else if (pMem->read(LY) == 144) {
-        pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x01);
-        pMem->write(STAT, (pMem->read(STAT) & 0xFC) | 0x01);
-        if (TEST(pMem->read(STAT), 4)) {
-            pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x02);
-        }
     }
     if (LX == 456) {
         LX = 0;
@@ -208,6 +199,13 @@ void gbppu::scanlineAdvance() {
             }
         } else {
             pMem->write(STAT, pMem->read(STAT) & ~0x04);
+        }
+        if (pMem->read(LY) == 144) {
+            pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x01);
+            pMem->write(STAT, (pMem->read(STAT) & 0xFC) | 0x01);
+            if (TEST(pMem->read(STAT), 4)) {
+                pMem->write(0xFF0F, pMem->read(0xFF0F) | 0x02);
+            }
         }
         if (pMem->read(LY) == 154) {
             pMem->write(LY, 0);
@@ -227,35 +225,17 @@ uint8_t gbppu::getBGMapPixel(uint16_t tx, uint16_t ty, uint8_t x, uint8_t y) {
         tileIndex += 0x80;
     }
     uint16_t tile = tiles + tileIndex * 16;
-    uint8_t data[8][8];
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            data[i][j] = (TEST(pMem->read(tile + (i * 2) + 1), 7 - j) << 1) | TEST(pMem->read(tile + (i * 2)), 7 - j);
-        }
-    }
-    return data[y][x];
+    return (TEST(pMem->read(tile + (y * 2) + 1), 7 - x) << 1) | TEST(pMem->read(tile + (y * 2)), 7 - x);
 }
 
 uint8_t gbppu::getTilePixel(uint16_t ti, uint8_t x, uint8_t y) {
     int tile = 0x8000 + ti * 16;
-    uint8_t data[8][8];
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            data[i][j] = (TEST(pMem->read(tile + (i * 2) + 1), 7 - j) << 1) | TEST(pMem->read(tile + (i * 2)), 7 - j);
-        }
-    }
-    return CMAP(data[y][x], BGP);
+    return CMAP((TEST(pMem->read(tile + (y * 2) + 1), 7 - x) << 1) | TEST(pMem->read(tile + (y * 2)), 7 - x), BGP);
 }
 
 uint8_t gbppu::getSpriteTilePixel(uint8_t ti, uint8_t x, uint8_t y) {
     int tile = 0x8000 + ti * 16;
-    uint8_t data[8][8];
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            data[i][j] = (TEST(pMem->read(tile + (i * 2) + 1), 7 - j) << 1) | TEST(pMem->read(tile + (i * 2)), 7 - j);
-        }
-    }
-    return data[y][x];
+    return (TEST(pMem->read(tile + (y * 2) + 1), 7 - x) << 1) | TEST(pMem->read(tile + (y * 2)), 7 - x);
 }
 
 uint16_t gbppu::getBGTileAddress() {

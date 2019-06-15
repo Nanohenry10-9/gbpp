@@ -12,6 +12,8 @@ class gbapu {
 public:
     gbmem *aMem;
 
+    bool disable, prevDis;
+
     SDL_AudioSpec want, have;
     SDL_AudioDeviceID dev;
 

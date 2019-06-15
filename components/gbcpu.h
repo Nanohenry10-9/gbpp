@@ -32,11 +32,13 @@ public:
     uint16_t REG_PC, REG_SP;
     bool halt, IME, nextTickIME;
     int idleTicks;
-    uint16_t serialDiv;
-    bool wakeOnInterrupt, stop;
+    uint16_t tickDiv;
+    bool wakeOnInterrupt, stop, completeHalt, haltAfterInst;
     uint16_t timer;
+    string lastInt;
 
-    void init(SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t);
+    void reset();
+    void init(SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t, string r);
 
     inline void setFlag(uint8_t f, bool s);
     inline bool flagSet(uint8_t f);

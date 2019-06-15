@@ -13,9 +13,11 @@ using namespace std;
 
 uint8_t ROMbanks[0x7F][0x4000];
 uint8_t RAMbanks[0x04][0x2000], banksLoaded;
-uint8_t memory[10000];
+uint8_t memory[0x10000];
 uint8_t bootROM[0x100];
 uint8_t bitsPending;
+
+const string opcodes[256];
 
 uint8_t ROMbank, RAMbank;
 bool mode, RAMmode;
@@ -29,18 +31,10 @@ bool keys[8];
 string serialBuffer;
 
 void gbmem::init(string file) {
-    banksLoaded = 0;
     serialBuffer = "";
-    bitsPending = 0;
     ROMbank = 1;
-    RAMbank = 0;
-    mode = 0;
-    RAMmode = 0;
-    DMAbase = 0;
-    DMAindex = 0;
-    DMAinProgress = 0;
 
-    /*ifstream DMG_ROM("", ios::binary | ios::ate);
+    /*ifstream DMG_ROM("", ios::binary | ios::ate); // Place bootstrap ROM's path here (disabled by default, see gbcpu::reset)
     DMG_ROM.seekg(0, ios::beg);
     DMG_ROM.read((char*)bootROM, 0x100);*/
 
@@ -48,7 +42,7 @@ void gbmem::init(string file) {
 
     ifstream ROMfile(file, ios::binary | ios::ate);
     long size = ROMfile.tellg();
-    SDL_Log("File length is %d KiB, loading %d banks...", size / 1024, size / 0x4000);
+    SDL_Log("File length is %ld KiB, loading %ld banks...", size / 1024, size / 0x4000);
     ROMfile.seekg(0, ios::beg);
     for (long i = 0; i < size / 0x4000; i++) {
         ROMfile.seekg(i * 0x4000);
@@ -103,12 +97,8 @@ void gbmem::write(int addr, uint8_t data) {
         DMAinProgress = 1;
     }
 
-    /*if (addr == 0xD804) {
-        SDL_Log("[Blargg]: Test set to %02X", data);
-    }*/
-
     if (addr == 0xFF04) {
-        // reset whole timer!
+        // TODO: reset whole timer!
         data = 0;
     }
     memory[addr] = data;
