@@ -59,8 +59,10 @@ While the emulator does output sound, it is not very accurate. There are occasio
 
 ## Assembler and disassembler
 
-Additionally there are two Python 3 scripts in the repository, one for assembling (`assembler.py`) and one for disassembling (`disassembler.py`). They both ask for source and destination files, and the disassembler accepts flags from the command line. Documentation on these two scripts will be added soon.
+Additionally there are two Python 3 scripts in the repository, one for assembling (`assembler.py`) and one for disassembling (`disassembler.py`). They both ask for source and destination files, and the disassembler accepts flags from the command line. 
 
 ### Disassembler flags
 
-TODO.
+The disassembler can be told to disassemble instructions from addresses it would not diasassemble from otherwise. This can be done with the `-l [address]` flag, where `[address]` is the address to disassemble from.
+
+If there are instructions in the ROM that are loaded elsewhere but have absolute addresses (such as in blargg's tests), the disassembler can be instructed to "rebase" those addresses with `-b [start address] [end address] [base address]`, where the instructions to be rebased are from `[start address]` to `[end address]` (exclusive) and the new base address is `[base address]`. For example, if the ROM has instructions from `C000h` to `D000h` and they are meant to use addresses from `4000h` to `5000h`, you would pass the disassembler `-b C000h D000h 4000h`.
