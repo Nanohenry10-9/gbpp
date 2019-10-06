@@ -3,6 +3,7 @@
 #include "gbmem.h"
 #include "gbapu.h"
 #include <deque>
+#include <unordered_set>
 
 using namespace std;
 
@@ -21,6 +22,8 @@ class gbcpu {
 public:
     deque<TraceEntry> trace;
     uint64_t printTraceIn;
+    unordered_set<uint16_t> breakpoints;
+    uint16_t bypassAddress;
     long freq;
     long period;
     uint64_t lastTick;
@@ -33,12 +36,12 @@ public:
     bool halt, IME, nextTickIME;
     int idleTicks;
     uint16_t tickDiv;
-    bool wakeOnInterrupt, stop, completeHalt, haltAfterInst;
-    uint16_t timer;
+    bool wakeOnInterrupt, stop, completeHalt, haltAfterInst, breakpoint;
     string lastInt;
+    string brName;
 
     void reset();
-    void init(SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t, string r);
+    void init(SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t, string r, string br);
 
     inline void setFlag(uint8_t f, bool s);
     inline bool flagSet(uint8_t f);
@@ -56,6 +59,7 @@ public:
     inline void stackPush(uint8_t v);
     inline uint8_t stackPop();
 
+    void doSerial();
     void doInterrupts();
     void updateTimer();
     void doDMA();
@@ -67,7 +71,9 @@ public:
     void sub(uint8_t *r1, uint8_t r2);
     void adc(uint8_t *r1, uint8_t r2);
     void sbc(uint8_t *r1, uint8_t r2);
-    void cp(uint8_t *r1, uint8_t r2);
+    void cp(uint8_t r1, uint8_t r2);
+    void inc(uint8_t *r);
+    void dec(uint8_t *r);
 
     void process();
     void update(uint64_t now);

@@ -30,13 +30,14 @@
 
 #define SAMPLE_RATE 44100
 
-#define TEST(v, b) ((v & (1 << b)) == (1 << b))
+#define TEST(v, b) (((v) & (1 << (b))) == (1 << (b)))
 
 using namespace std;
 
 gbmem *aMem;
 
 bool disable, prevDis;
+bool enabledChannels[4] = {1, 1, 1, 1};
 
 SDL_AudioSpec want, have;
 SDL_AudioDeviceID dev;
@@ -65,18 +66,12 @@ uint16_t lfsr;
 
 #define UNIT 1000000.0
 
-static double pulseWave(int time, double f, double d) {
-    if (f == 0) {
-        return 0;
-    }
-    return double(time % int(UNIT / f)) < (d * int(UNIT / f));
+static double pulseWave(double time, double f, double d) {
+    return fmod(time, (1.0 / f)) < (d * (1.0 / f));
 }
 
-static uint8_t getWave(int time, double f) {
-    if (f == 0) {
-        return 0;
-    }
-    return waveBuffer[int(double(time % int(UNIT / f)) / (UNIT / f) * 32)];
+static uint8_t getWave(double time, double f) {
+    return waveBuffer[int(fmod(time, (1.0 / f)) / (1.0 / f) * 32)];
 }
 
 /*static void tickLFSR() {
@@ -93,25 +88,36 @@ void audioCallback(void *userData, uint8_t *rawBuffer, int bytes) {
     int &sampleIndex = *(int*)userData;
     uint16_t *buffer = (uint16_t*)rawBuffer;
     for(int i = 0; i < bytes / 2; i++, sampleIndex++) {
-        double time = (double)sampleIndex / SAMPLE_RATE; // [0, 1)
+        double time = fmod((double)sampleIndex / SAMPLE_RATE, 1); // [0, 1) seconds
         uint16_t pulse1 = 0, pulse2 = 0, wave = 0, noise = 0;
-        if (pulse1V > 0 && pulse1F > 0 && pulse1P > 0) {
-            pulse1 = pulseWave(time * UNIT, pulse1F, pulse1P) * pulse1V * (0xFFFF >> 4);
+        if (enabledChannels[0] && pulse1V > 0 && pulse1F > 0 && pulse1P > 0) {
+            pulse1 = pulseWave(time, pulse1F, pulse1P) * pulse1V * (0xFFFF >> 4);
         }
-        if (pulse2V > 0 && pulse2F > 0 && pulse2P > 0) {
-            pulse2 = pulseWave(time * UNIT, pulse2F, pulse2P) * pulse2V * (0xFFFF >> 4);
+        if (enabledChannels[1] && pulse2V > 0 && pulse2F > 0 && pulse2P > 0) {
+            pulse2 = pulseWave(time, pulse2F, pulse2P) * pulse2V * (0xFFFF >> 4);
         }
-        if (waveS != 4 && waveF > 0) {
-            wave = (getWave(time * UNIT, waveF) >> waveS) << 8;
+        if (enabledChannels[2] && waveF > 0) {
+            wave = (getWave(time, waveF) >> waveS) << 8;
         }
-        if (noiseV > 0 && noiseF > 0) {
-            /*if (int(time * UNIT) % int(UNIT / noiseF) == 0) {
+        if (enabledChannels[3] && noiseV > 0 && noiseF > 0) {
+            /*if (int(time) % int(noiseF) == 0) {
                 tickLFSR();
             }*/
             noise = ((rand() & 1) * 0x0FFF) * noiseV;//double(noiseLevel * (0xFFFF >> 4)) * noiseV;
         }
         buffer[i] = pulse1 + pulse2 + wave + noise;
     }
+}
+
+void gbapu::channels(bool a, bool b, bool c, bool d) {
+    enabledChannels[0] = a;
+    enabledChannels[1] = b;
+    enabledChannels[2] = c;
+    enabledChannels[3] = d;
+}
+
+void gbapu::toggleChannel(int c) {
+    enabledChannels[c] = !enabledChannels[c];
 }
 
 void gbapu::init(gbmem* mem) {
@@ -139,7 +145,7 @@ const double dutyCycles[4] = {0.125, 0.25, 0.5, 0.75};
 const uint8_t waveShifts[4] = {4, 0, 1, 2};
 const uint8_t noiseDivisors[8] = {8, 16, 32, 48, 64, 80, 96, 112};
 
-void gbapu::tick(uint16_t timer) {
+void gbapu::tick() {
     if (disable && !prevDis) {
         SDL_PauseAudio(1);
         SDL_Log("Audio stopped");
@@ -149,7 +155,7 @@ void gbapu::tick(uint16_t timer) {
     }
     prevDis = disable;
 
-    internalTimer = timer;
+    internalTimer++;
 
     if (TEST(aMem->read(NR14), 7)) {
         aMem->write(NR52, aMem->read(NR52) | 0x01);
@@ -214,16 +220,16 @@ void gbapu::tick(uint16_t timer) {
     } else {
         waveS = waveShifts[(aMem->read(NR32) & 0b01100000) >> 5];
     }
-    if (waveS != 4) {
-        int rawFreq3 = aMem->read(NR33) | ((aMem->read(NR34) & 0b0111) << 8);
-        if (prevWF != rawFreq3) {
-            waveF = 65536.0 / (2048 - rawFreq3);
-        }
-        prevWF = rawFreq3;
+    int rawFreq3 = aMem->read(NR33) | ((aMem->read(NR34) & 0b0111) << 8);
+    if (prevWF != rawFreq3) {
+        waveF = 65536.0 / (2048 - rawFreq3);
+        //SDL_Log("Wave updated to %03X (%f)", rawFreq3, waveF);
     }
-    int index = internalTimer & 15;
-    waveBuffer[index * 2] = (aMem->read(WAVE + index) & 0b11110000) >> 4;
-    waveBuffer[index * 2 + 1] = aMem->read(WAVE + index) & 0b1111;
+    prevWF = rawFreq3;
+    for (int i = 0; i < 16; i++) {
+        waveBuffer[i * 2] = (aMem->read(WAVE + i) & 0b11110000) >> 4;
+        waveBuffer[i * 2 + 1] = aMem->read(WAVE + i) & 0b1111;
+    }
 
     if (TEST(aMem->read(NR44), 7)) {
         aMem->write(NR52, aMem->read(NR52) | 0x08);

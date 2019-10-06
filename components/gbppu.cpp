@@ -23,8 +23,8 @@ using namespace std;
 
 #define TEST(v, b) (((v) & (1 << (b))) == (1 << (b)))
 
-const uint8_t palette[4][3] = {{0xAC, 0xB5, 0x6B}, {0x76, 0x84, 0x48}, {0x3F, 0x50, 0x3F}, {0x24, 0x31, 0x37}};
-//const uint8_t palette[4][3] = {{0xFF, 0x00, 0x00}, {0x00, 0xFF, 0x00}, {0x00, 0x00, 0xFF}, {0xFF, 0xFF, 0x00}};
+const uint8_t palette[5][3] = {{0xAC, 0xB5, 0x6B}, {0x76, 0x84, 0x48}, {0x3F, 0x50, 0x3F}, {0x24, 0x31, 0x37}, {0xC7, 0xD1, 0x7B}};
+//const uint8_t palette[4][3] = {{0xFF, 0xFF, 0xFF}, {0x7F, 0x7F, 0x7F}, {0x3F, 0x3F, 0x3F}, {0x00, 0x00, 0x00}};
 
 uint16_t LX;
 double frameCount;
@@ -37,17 +37,28 @@ SDL_Texture *lastFrame, *tm, *bg;
 gbmem *pMem;
 uint8_t spritesOnLine[10];
 uint8_t spriteIndex;
+bool drawScanline;
 
 void gbppu::init(gbmem* mem, SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t) {
     pMem = mem;
     lastFrame = screen;
     tm = e;
     bg = t;
+    drawScanline = 0;
 }
 
 void gbppu::render() {
-    for (int i = 0; i < 160 * 144; i++) {
-        pixels[i] = 0xFF000000 | (palette[buffer[i]][0] << 16) | (palette[buffer[i]][1] << 8) | palette[buffer[i]][2];
+    if ((pMem->read(0xFF40) & 0x80) == 0x80) {
+        for (int i = 0; i < 160 * 144; i++) {
+            pixels[i] = 0xFF000000 | (palette[buffer[i]][0] << 16) | (palette[buffer[i]][1] << 8) | palette[buffer[i]][2];
+        }
+    } else {
+        for (int i = 0; i < 160 * 144; i++) {
+            pixels[i] = 0xFF000000 | (palette[4][0] << 16) | (palette[4][1] << 8) | palette[4][2];
+        }
+    }
+    if (drawScanline && LX >= 80 && LX < 240 && pMem->read(LY) < 144) {
+        pixels[(LX - 80) + pMem->read(LY) * 160] &= 0xFFFF0000;
     }
     /*if (debug) {
         for (int i = 0; i < 160; i += 8) {
@@ -67,7 +78,7 @@ void gbppu::render() {
             }
         }
     }*/
-    SDL_UpdateTexture(lastFrame, NULL, &pixels, 160 * 4);
+    SDL_UpdateTexture(lastFrame, NULL, pixels, 160 * 4);
 }
 
 void gbppu::renderTilemap() {

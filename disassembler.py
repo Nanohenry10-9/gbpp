@@ -66,12 +66,14 @@ def checkAddress(addr):
         return "cartridge RAM"
     return ""
 
-def labelSort(l):
+def labelSort(l): # passed to sorted() to sort labels by address in increasing order
     for p in labels:
         if p[2] == l:
             return p[0]
     return 0
 
+# opcode to instruction/mnemonic mapping
+# opcode: (bytes, "mnemonic")
 opcodes = {
     0x00: (1, "NOP"),
     0x01: (3, "LD BC,{}"),
@@ -127,13 +129,19 @@ opcodes = {
     0x30: (2, "JR NC,{}"),
     0x31: (3, "LD SP,{}"),
     0x32: (1, "LD (HL-),A"),
-    0x36: (2, "LD (HL),d8"),
+    0x34: (1, "INC (HL)"),
+    0x36: (2, "LD (HL),{}"),
+    0x38: (2, "JR C,{}"),
+    0x3A: (1, "LD A,(HL-)"),
     0x3C: (1, "INC A"),
     0x3D: (1, "DEC A"),
     0x3E: (2, "LD A,{}"),
 
+    0x40: (1, "LD B,B"),
+    0x44: (1, "LD B,H"),
     0x46: (1, "LD B,(HL)"),
     0x47: (1, "LD B,A"),
+    0x4D: (1, "LD C,L"),
     0x4F: (1, "LD C,A"),
     
     0x56: (1, "LD D,(HL)"),
@@ -141,6 +149,7 @@ opcodes = {
     0x5E: (1, "LD E,(HL)"),
     0x5F: (1, "LD E,A"),
     
+    0x62: (1, "LD H,D"),
     0x66: (1, "LD H,(HL)"),
     0x67: (1, "LD H,A"),
     0x69: (1, "LD L,C"),
@@ -156,22 +165,29 @@ opcodes = {
     0x75: (1, "LD (HL),L"),
     0x77: (1, "LD (HL),A"),
     0x78: (1, "LD A,B"),
+    0x79: (1, "LD A,C"),
+    0x7A: (1, "LD A,D"),
     0x7B: (1, "LD A,E"),
     0x7C: (1, "LD A,H"),
     0x7D: (1, "LD A,L"),
+    0x7E: (1, "LD A,(HL)"),
 
+    0x80: (1, "ADD A,B"),
     0x86: (1, "ADD A,(HL)"),
     0x87: (1, "ADD A,A"),
 
     0x90: (1, "SUB A,B"),
     0x9F: (1, "SBC A,A"),
 
-    0xA7: (1, "AND A"),
-    0xAF: (1, "XOR A"),
+    0xA7: (1, "AND A,A"),
+    0xAF: (1, "XOR A,A"),
 
-    0xB1: (1, "OR C"),
-    0xB7: (1, "OR A"),
-    0xBE: (1, "CP (HL)"),
+    0xB0: (1, "OR A,B"),
+    0xB1: (1, "OR A,C"),
+    0xB3: (1, "OR A,E"),
+    0xB6: (1, "OR A,(HL)"),
+    0xB7: (1, "OR A,A"),
+    0xBE: (1, "CP A,(HL)"),
 
     0xC0: (1, "RET NZ"),
     0xC1: (1, "POP BC"),
@@ -181,6 +197,7 @@ opcodes = {
     0xC5: (1, "PUSH BC"),
     0xC8: (1, "RET Z"),
     0xC9: (1, "RET"),
+    0xCA: (3, "JP Z,{}"),
     0xCB: (2, ""),
     0xCE: (2, "ADC A,{}"),
     0xCD: (3, "CALL {}"),
@@ -191,6 +208,7 @@ opcodes = {
     0xD6: (2, "SUB {}"),
     0xD8: (1, "RET C"),
     0xD9: (1, "RETI"),
+    0xDA: (3, "JP C,{}"),
 
     0xE0: (2, "LDH (FF{}),A"),
     0xE1: (1, "POP HL"),
@@ -205,6 +223,8 @@ opcodes = {
     0xF1: (1, "POP AF"),
     0xF3: (1, "DI"),
     0xF5: (1, "PUSH AF"),
+    0xF6: (2, "OR {}"),
+    0xF8: (2, "LD HL,SP+({})"),
     0xF9: (1, "LD SP,HL"),
     0xFA: (3, "LD A,({})"),
     0xFB: (1, "EI"),
@@ -214,53 +234,73 @@ opcodes = {
 
 bitInsts = {
     0x11: "RL C",
+
+    0x37: "SWAP A",
     
+    0x7B: "BIT 7,E",
     0x7C: "BIT 7,H"
 }
 
 disassembly = {}
 raw = []
 
-while True:
-    fileIn = input("File to disassemble? ")
-    try:
-        with open(fileIn, "rb") as f:
-            raw = f.read(0x8000)
-            break
-    except FileNotFoundError:
-        print("File not found")
+bases = []
 
-fileOut = input("File for output? ")
+romLen = 0x8000
 
-labels = [
-    (0x00, len(raw), "0000h"),
-    (0x08, len(raw), "0008h"),
-    (0x10, len(raw), "0010h"),
-    (0x18, len(raw), "0018h"),
-    (0x20, len(raw), "0020h"),
-    (0x28, len(raw), "0028h"),
-    (0x30, len(raw), "0030h"),
-    (0x38, len(raw), "0038h"),
+labels = [ # addresses to disassemble, i.e. known places for labels
+    (0x00, romLen, "0000h"),
+    (0x08, romLen, "0008h"),
+    (0x10, romLen, "0010h"),
+    (0x18, romLen, "0018h"),
+    (0x20, romLen, "0020h"),
+    (0x28, romLen, "0028h"),
+    (0x30, romLen, "0030h"),
+    (0x38, romLen, "0038h"),
 
-    (0x40, len(raw), "V-Blank IRQ"),
-    (0x48, len(raw), "STAT IRQ"),
-    (0x50, len(raw), "Timer IRQ"),
-    (0x58, len(raw), "Serial IRQ"),
-    (0x60, len(raw), "Joypad IRQ"),
+    (0x40, romLen, "V-Blank IRQ"),
+    (0x48, romLen, "STAT IRQ"),
+    (0x50, romLen, "Timer IRQ"),
+    (0x58, romLen, "Serial IRQ"),
+    (0x60, romLen, "Joypad IRQ"),
 
     (0x100, 0x104, "main")
 ]
 
-bases = []
+fileIn = ""
+fileOut = ""
 
 if len(sys.argv) > 1:
     for i in range(1, len(sys.argv)):
         if sys.argv[i] == "-l": # -l [address]
             print("Disassembling additionally from " + toHex(int(sys.argv[i + 1], 16), 4))
-            labels.append((int(sys.argv[i + 1], 16), len(raw), toHex(int(sys.argv[i + 1], 16), 4)))
+            labels.append((int(sys.argv[i + 1], 16), romLen, toHex(int(sys.argv[i + 1], 16), 4)))
         if sys.argv[i] == "-b": # -b [start address] [end address] [base address]
             print("Rebasing addresses " + toHex(int(sys.argv[i + 1], 16), 4) + " - " + toHex(int(sys.argv[i + 2], 16), 4) + " to " + toHex(int(sys.argv[i + 3], 16), 4))
             bases.append((int(sys.argv[i + 1], 16), int(sys.argv[i + 2], 16), int(sys.argv[i + 3], 16)))
+        if sys.argv[i] == "-i":
+            fileIn = sys.argv[i + 1]
+        if sys.argv[i] == "-o":
+            fileOut = sys.argv[i + 1]
+
+if fileIn == "":
+    while True:
+        fileIn = input("File to disassemble? ")
+        try:
+            with open(fileIn, "rb") as f:
+                raw = f.read(romLen)
+                break
+        except FileNotFoundError:
+            print("File not found")
+else:
+    try:
+        with open(fileIn, "rb") as f:
+            raw = f.read(romLen)
+    except FileNotFoundError:
+        print("Input file not found")
+
+if fileOut == "":
+    fileOut = input("File for output? ")
 
 def rebaseAddress(addr):
     for b in bases:
@@ -268,27 +308,27 @@ def rebaseAddress(addr):
             return (addr - b[0]) + b[2]
     return addr
 
-addrDefs = [0xC2, 0xC3, 0xC4, 0xCA, 0xCC, 0xCD, 0xD2, 0xD4, 0xDA, 0xDC]
-relAddrDefs = [0x18, 0x20, 0x28, 0x30, 0x38]
-noReturn = [0xC3, 0x18, 0xC9, 0xD9, 0xE9, 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF]
+addrDefs = [0xC2, 0xC3, 0xC4, 0xCA, 0xCC, 0xCD, 0xD2, 0xD4, 0xDA, 0xDC]                         # opcodes that have an address after them - used for finding sections with code
+relAddrDefs = [0x18, 0x20, 0x28, 0x30, 0x38]                                                    # opcodes that have a relative address after them
+noReturn = [0xC3, 0x18, 0xC9, 0xD9, 0xE9, 0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF, 0x10] # opcodes that are surely not followed by code
 
-i = 0
-while True:
-    if i >= len(labels):
+i = 0       # current index of label in list
+while True: # iterate over addresses to disassemble
+    if i >= len(labels): # stop if at end
         break
-    head = labels[i][0]
-    if head >= len(raw):
-        i += 1
-        continue
-    if labels[i][2] not in disassembly:
+    head = labels[i][0] # get starting address of label
+    if head >= len(raw): # if label is beyond end of ROM
+        i += 1           # take the next one
+        continue         # and repeat previous steps
+    if labels[i][2] not in disassembly: # make sure label has entry in dictionary 
         disassembly[labels[i][2]] = ""
-    else:
-        i += 1
+    else:                               # if it already has one, it is already disassembled
+        i += 1                          # so continue to next label
         continue
-    cur = labels[i][2]
+    cur = labels[i][2] # the name of the currently disassembled label
     while True:
-        if head >= len(raw) or head >= labels[i][1]:
-            break
+        if head >= len(raw) or head >= labels[i][1]: # if end of label or ROM found
+            break                                    # stop and move onto next label
         while True:
             dt = False
             for j in range(len(labels)):
@@ -304,6 +344,11 @@ while True:
                     break
             if not dt:
                 break
+        if raw[head] not in opcodes:
+            print("Could not disassemble " + toHex(raw[head], 2))
+            labels[i] = (labels[i][0], head, labels[i][2])
+            disassembly[labels[i][2]] += "    ; " + toHex(raw[head], 2) + "?\n"
+            break
         if raw[head] in addrDefs or raw[head] in relAddrDefs:
             jp = rebaseAddress(raw[head + 1] | (raw[head + 2] << 8))
             f = True
@@ -320,12 +365,7 @@ while True:
                 labels.append((jp, len(raw), toHex(jp, 4)))
         if raw[head] in noReturn:
             labels[i] = (labels[i][0], head + opcodes[raw[head]][0], labels[i][2])
-        if raw[head] not in opcodes:
-            print("Could not disassemble " + toHex(raw[head], 2))
-            labels[i] = (labels[i][0], head, labels[i][2])
-            disassembly[labels[i][2]] += "    ; " + toHex(raw[head], 2) + "?\n"
-            break
-        op = opcodes[raw[head]][1]
+        op = opcodes[raw[head]][1] # get opcode assembly mnemonic
         com = ""
         if raw[head] == 0xCB:
             if raw[head + 1] in bitInsts:
@@ -336,15 +376,18 @@ while True:
                 labels[i] = (labels[i][0], head, labels[i][2])
                 break
         if opcodes[raw[head]][0] == 2:
-            if op[:2] == "JR":
+            if op[:2] == "JR" or raw[head] in [0xF8, 0xE8]:
                 offset = raw[head + 1]
                 if offset & 0x80:
                     offset -= 0x100
-                op = op.format(toHex(head + 2 + offset, 4))
+                if raw[head] in [0xF8, 0xE8]:
+                    op = op.format(offset)
+                else:
+                    op = op.format(toHex(head + 2 + offset, 4))
             else:
                 op = op.format(toHex(raw[head + 1], 2))
                 if op[:3] == "LDH":
-                    com = checkAddress(0xFF00 | raw[head + 1])
+                    com = checkAddress(0xFF00 + raw[head + 1])
         elif opcodes[raw[head]][0] == 3:
             addr = rebaseAddress(raw[head + 1] | (raw[head + 2] << 8))
             op = op.format(toHex(addr, 4))
@@ -355,7 +398,7 @@ while True:
            op += toHex(raw[head + j], 2) + " "
         for j in range(opcodes[raw[head]][0], 4):
            op += "    "
-        disassembly[labels[i][2]] += "    " + op + "   " + com + "\n"
+        disassembly[labels[i][2]] += "    " + op + "   " + com + "\n" # add dissassembled instruction under label
         head += opcodes[raw[head]][0]
     i += 1
 
@@ -372,10 +415,10 @@ def char(c):
 
 i = 0
 while i < len(raw):
-    l = inLabel(i)
-    if l != -1:
-        i = l[1]
-        continue
+    l = inLabel(i) # check if data added to label
+    if l != -1:    # if not part of label (i.e. if not disassembled/code)
+        i = l[1]   # go to end of label
+        continue   # repeat last three lines to be sure
     if i < len(raw):
         startAddr = i
         length = 0
@@ -411,7 +454,6 @@ for l in sorted(disassembly.keys(), key = labelSort):
         c = " ; code entry point"
     finished += l + ":" + c + "\n" + disassembly[l] + "\n"
 
-#print(finished)
 with open(fileOut, "w") as f:
     f.write(finished)
 input("Press return to continue...")

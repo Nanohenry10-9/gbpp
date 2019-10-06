@@ -20,6 +20,7 @@ public:
     gbmem *pMem;
     uint8_t spritesOnLine[10];
     uint8_t spriteIndex;
+    bool drawScanline;
 
     void init(gbmem* mem, SDL_Texture* screen, SDL_Texture* e, SDL_Texture* t);
     

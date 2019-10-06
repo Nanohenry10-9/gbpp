@@ -17,7 +17,10 @@ public:
     SDL_AudioSpec want, have;
     SDL_AudioDeviceID dev;
 
+    void channels(bool a, bool b, bool c, bool d);
+    void toggleChannel(int c);
+
     void init(gbmem* mem);
 
-    void tick(uint16_t timer);
+    void tick();
 };
