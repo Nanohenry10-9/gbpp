@@ -77,15 +77,15 @@ The controls are mapped to the following keys:
 
 In addition to those, there are some other keys that do useful things:
 
-| Keyboard key(s) | Function                                                     |
-| --------------- | ------------------------------------------------------------ |
-| M               | Put the emulator into step-by-step mode                      |
-| Space           | Advances by one instruction if in step-by-step mode          |
-| W               | Prints a visual representation of the wave channel's samples |
-| R               | Reset the emulated CPU                                       |
-| D               | Toggle the debugger/disassembler view                        |
-| 1, 2, 3 and 4   | Toggle the Game Boy's respective sound channel               |
-| Escape          | Exit                                                         |
+| Keyboard key(s) | Function                                                    |
+| --------------- | ----------------------------------------------------------- |
+| M               | Put the emulator into step-by-step mode                     |
+| Space           | Advance by one instruction if in step-by-step mode          |
+| W               | Print a visual representation of the wave channel's samples |
+| R               | Reset the emulated CPU                                      |
+| D               | Toggle the debugger/disassembler view (hidden by default)   |
+| 1, 2, 3 and 4   | Toggle the Game Boy's respective sound channel              |
+| Escape          | Exit                                                        |
 
 Right now these keys are hardcoded and cannot be configured (except by manually editing the source code).
 
